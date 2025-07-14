@@ -1,4 +1,4 @@
-'''Version 12 - Making a starting screen '''
+'''Nothing interact just some backdrops'''
 
 import pygame
 import os

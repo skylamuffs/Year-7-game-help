@@ -1,27 +1,22 @@
-'''Version 6 - from simple math to year 7 math '''
+'''Version 6 - adding math problems '''
+
 import pygame
 import sys
 import random
-from fractions import Fraction
 
 # Initialize pygame
 pygame.init()
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Samurai Math Duel")
+pygame.display.set_caption("Samurai Math")
 
 # Colors
 BACKGROUND = (30, 30, 40)
-PLAYER_COLOR = (255, 80, 80)    # Red
-ENEMY_COLOR = (80, 80, 255)     # Blue
+RED = (255, 80, 80)
+BLUE = (80, 80, 255)
 WHITE = (255, 255, 255)
 
-# Fonts
-question_font = pygame.font.SysFont('Arial', 32, bold=True)
-button_font = pygame.font.SysFont('Arial', 24)
-health_font = pygame.font.SysFont('Arial', 20, bold=True)
-
-# Load sword images
+# Load sword image (same for both)
 try:
     sword_img = pygame.image.load("Sword_Enemy.png").convert_alpha()
     sword_img = pygame.transform.scale(sword_img, (60, 60))
@@ -31,134 +26,99 @@ except:
     print("Sword image not found, using rectangles")
     sword_img = None
 
-# Math Question Generator
-def generate_math_question():
-    question_type = random.choice([
-        'fraction_addition', 
-        'decimal_conversion', 
-        'percentage', 
-        'basic_algebra',
-        'fraction_of_quantity'
-    ])
-    
-    if question_type == 'fraction_addition':
-        a = Fraction(random.randint(1, 3), random.randint(2, 4))
-        b = Fraction(random.randint(1, 3), random.randint(2, 4))
-        question = f"{a} + {b} = ?"
-        answer = a + b
-    elif question_type == 'decimal_conversion':
-        frac = Fraction(random.randint(1, 4), random.randint(2, 5))
-        question = f"Convert {frac} to a decimal"
-        answer = float(frac)
-    elif question_type == 'percentage':
-        num = random.randint(1, 20) * 5
-        quantity = random.randint(10, 100)
-        question = f"{num}% of {quantity} = ?"
-        answer = round(num / 100 * quantity, 2)
-    elif question_type == 'basic_algebra':
-        x = random.randint(2, 5)
-        coeff = random.randint(2, 5)
-        const = random.randint(1, 10)
-        question = f"If {coeff}x + {const} = {coeff*x + const}, x = ?"
-        answer = x
-    elif question_type == 'fraction_of_quantity':
-        frac = Fraction(random.randint(1, 3), random.randint(2, 4))
-        quantity = random.randint(10, 50)
-        question = f"Find {frac} of {quantity}"
-        answer = frac * quantity
-    
-    # Generate wrong answers
-    answers = [answer]
-    while len(answers) < 3:
-        if isinstance(answer, (int, float)):
-            wrong = answer * random.choice([0.5, 1.5, 2])
-        elif isinstance(answer, Fraction):
-            wrong = answer + Fraction(1, random.randint(2, 5))
-        if wrong not in answers:
-            answers.append(wrong)
-    
-    random.shuffle(answers)
-    return question, answer, answers
-
-# Fighter class
+# Combatants
 class Fighter:
-    def __init__(self, x, y, size, color, is_player):
+    def __init__(self, x, y, size, color, speed, is_player):
         self.x = x
         self.y = y
         self.size = size
         self.color = color
+        self.speed = speed
         self.original_pos = (x, y)
         self.health = 100
         self.is_attacking = False
         self.attack_progress = 0
         self.is_player = is_player
-        self.speed = 5
         
     def draw(self, surface):
         # Draw fighter body
         pygame.draw.rect(surface, self.color, 
-                       (self.x - self.size//2, 
-                        self.y - self.size//2, 
-                        self.size, self.size))
+                        (self.x - self.size//2, 
+                         self.y - self.size//2, 
+                         self.size, self.size))
         
-        # Draw sword if image exists
+        # Draw sword
         if sword_img:
             if self.is_attacking:
-                # Rotate sword when attacking
                 if self.is_player:
-                    sword = pygame.transform.rotate(player_sword, -45)  # Player swings forward
-                    pos = (self.x + self.size//2 + 20, self.y)  # Position during attack
+                    sword = pygame.transform.rotate(player_sword, -45)
+                    pos = (self.x + self.size//2 + 20, self.y)
                 else:
-                    sword = pygame.transform.rotate(antagonist_sword, 45)  # Enemy swings forward
-                    pos = (self.x - self.size//2 - 20, self.y)  # Position during attack
+                    sword = pygame.transform.rotate(antagonist_sword, 45)
+                    pos = (self.x - self.size//2 - 20, self.y)
             else:
-                # Normal sword position when not attacking
                 sword = player_sword if self.is_player else antagonist_sword
                 pos = (self.x + self.size//2, self.y) if self.is_player else (self.x - self.size//2, self.y)
             
-            # Draw the sword
             sword_rect = sword.get_rect(center=pos)
             surface.blit(sword, sword_rect)
-    
+
     def attack(self, target):
-        if not self.is_attacking:
-            self.is_attacking = True
-            self.attack_progress = 0
-            
+        self.is_attacking = True
+        self.attack_progress = 0
+        
     def update(self):
         if self.is_attacking:
-            self.attack_progress += 0.08
-            
-            target = antagonist if self.is_player else player
-            self.x = self.original_pos[0] + (target.x - self.original_pos[0]) * self.attack_progress
-            self.y = self.original_pos[1] + (target.y - self.original_pos[1]) * self.attack_progress
-            
-            if self.attack_progress >= 1:
+            self.attack_progress += 0.1
+            if self.attack_progress < 1:
+                # Move toward opponent during attack
+                if self.is_player:
+                    self.x = self.original_pos[0] + (antagonist.x - self.original_pos[0]) * self.attack_progress
+                    self.y = self.original_pos[1] + (antagonist.y - self.original_pos[1]) * self.attack_progress
+                else:
+                    self.x = self.original_pos[0] + (player.x - self.original_pos[0]) * self.attack_progress
+                    self.y = self.original_pos[1] + (player.y - self.original_pos[1]) * self.attack_progress
+            else:
+                # Return to original position
                 self.is_attacking = False
                 self.x, self.y = self.original_pos
-                return True  # Attack completed
+                return True  
         return False
 
-# Button class
+# Create fighters
+player = Fighter(WIDTH//4, HEIGHT//2, 40, RED, 5, True)
+antagonist = Fighter(3*WIDTH//4, HEIGHT//2, 50, BLUE, 5, False)
+
+# Math system
+def generate_question():
+    a, b = random.randint(1, 10), random.randint(1, 10)
+    op = random.choice(['+', '-', '*'])
+    answer = eval(f"{a}{op}{b}")
+    question = f"{a} {op} {b} = ?"
+    
+    # Generate 2 wrong answers
+    answers = [answer]
+    while len(answers) < 3:
+        wrong = answer + random.choice([-1,1]) * random.randint(1,5)
+        if wrong != answer and wrong not in answers:
+            answers.append(wrong)
+    random.shuffle(answers)
+    return question, answer, answers
+
 class AnswerButton:
     def __init__(self, x, y, width, height, answer, index):
         self.rect = pygame.Rect(x, y, width, height)
         self.answer = answer
         self.color = (70, 70, 70)
         self.hover_color = (100, 100, 100)
-        self.text_color = WHITE
+        self.font = pygame.font.SysFont('Arial', 24)
         
     def draw(self, surface):
         color = self.hover_color if self.is_hovered() else self.color
         pygame.draw.rect(surface, color, self.rect)
         pygame.draw.rect(surface, (50, 50, 50), self.rect, 2)
         
-        if isinstance(self.answer, Fraction):
-            answer_text = f"{self.answer.numerator}/{self.answer.denominator}"
-        else:
-            answer_text = str(round(self.answer, 2)) if isinstance(self.answer, float) else str(self.answer)
-        
-        text = button_font.render(answer_text, True, self.text_color)
+        text = self.font.render(str(self.answer), True, WHITE)
         text_rect = text.get_rect(center=self.rect.center)
         surface.blit(text, text_rect)
         
@@ -168,35 +128,15 @@ class AnswerButton:
     def is_clicked(self, event):
         return event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos)
 
-# Create fighters
-player = Fighter(WIDTH//4, HEIGHT//2, 50, PLAYER_COLOR, True)
-antagonist = Fighter(3*WIDTH//4, HEIGHT//2, 50, ENEMY_COLOR, False)
-
 # Game setup
-current_question, correct_answer, answers = generate_math_question()
-
-# Centered button configuration
-button_width = 160
-button_height = 60
-button_margin = 20
-total_buttons_width = 3 * button_width + 2 * button_margin
-start_x = (WIDTH - total_buttons_width) // 2
-
-buttons = [
-    AnswerButton(
-        start_x + i * (button_width + button_margin),
-        HEIGHT - 120,  # Moved up slightly from bottom
-        button_width,
-        button_height,
-        answers[i],
-        i
-    ) for i in range(3)
-]
+current_question, correct_answer, answers = generate_question()
+buttons = [AnswerButton(200 + i*150, HEIGHT-80, 100, 50, answers[i], i) for i in range(3)]
+font = pygame.font.SysFont('Arial', 32)
+damage_font = pygame.font.SysFont('Arial', 24, bold=True)
+clock = pygame.time.Clock()
 
 # Game loop
-clock = pygame.time.Clock()
 running = True
-
 while running:
     # Event handling
     for event in pygame.event.get():
@@ -205,8 +145,8 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 running = False
-        
-        # Handle button clicks
+                
+        # Answer selection
         if not player.is_attacking and not antagonist.is_attacking:
             for button in buttons:
                 if button.is_clicked(event):
@@ -214,62 +154,89 @@ while running:
                         player.attack(antagonist)
                     else:
                         antagonist.attack(player)
-                    # Generate new question
-                    current_question, correct_answer, answers = generate_math_question()
+                    # New question
+                    current_question, correct_answer, answers = generate_question()
                     for i, btn in enumerate(buttons):
                         btn.answer = answers[i]
     
-    # Update attacks
-    if player.update():
-        antagonist.health = max(0, antagonist.health - 10)
-    if antagonist.update():
-        player.health = max(0, player.health - 10)
+    # Movement (only when not attacking)
+    keys = pygame.key.get_pressed()
+    if not player.is_attacking:
+        if keys[pygame.K_a] and player.x > player.size//2:
+            player.x -= player.speed
+            player.original_pos = (player.x, player.y)
+        if keys[pygame.K_d] and player.x < WIDTH - player.size//2:
+            player.x += player.speed
+            player.original_pos = (player.x, player.y)
+        if keys[pygame.K_w] and player.y > player.size//2:
+            player.y -= player.speed
+            player.original_pos = (player.x, player.y)
+        if keys[pygame.K_s] and player.y < HEIGHT - player.size//2:
+            player.y += player.speed
+            player.original_pos = (player.x, player.y)
     
-    # Draw everything
+    if not antagonist.is_attacking:
+        if keys[pygame.K_LEFT] and antagonist.x > antagonist.size//2:
+            antagonist.x -= antagonist.speed
+            antagonist.original_pos = (antagonist.x, antagonist.y)
+        if keys[pygame.K_RIGHT] and antagonist.x < WIDTH - antagonist.size//2:
+            antagonist.x += antagonist.speed
+            antagonist.original_pos = (antagonist.x, antagonist.y)
+        if keys[pygame.K_UP] and antagonist.y > antagonist.size//2:
+            antagonist.y -= antagonist.speed
+            antagonist.original_pos = (antagonist.x, antagonist.y)
+        if keys[pygame.K_DOWN] and antagonist.y < HEIGHT - antagonist.size//2:
+            antagonist.y += antagonist.speed
+            antagonist.original_pos = (antagonist.x, antagonist.y)
+    
+    # Update attacks
+    if player.update():  # Returns True when attack completes
+           antagonist.health -= 10
+    if antagonist.update():
+        player.health -= 10
+    
+    # Drawing
     screen.fill(BACKGROUND)
     
-    # Draw health bars
-    pygame.draw.rect(screen, (50, 50, 50), (20, 20, 204, 24), 2)
-    pygame.draw.rect(screen, PLAYER_COLOR, (22, 22, 2*player.health, 20))
-    pygame.draw.rect(screen, (50, 50, 50), (WIDTH-224, 20, 204, 24), 2)
-    pygame.draw.rect(screen, ENEMY_COLOR, (WIDTH-222, 22, 2*antagonist.health, 20))
+    # Health bars
+    pygame.draw.rect(screen, RED, (20, 20, player.health * 2, 20))
+    pygame.draw.rect(screen, BLUE, (WIDTH-220, 20, antagonist.health * 2, 20))
+    health_text = font.render(f"{player.health}", True, WHITE)
+    screen.blit(health_text, (20, 45))
+    health_text = font.render(f"{antagonist.health}", True, WHITE)
+    screen.blit(health_text, (WIDTH-70, 45))
     
-    health_text = health_font.render(f"Health: {player.health}", True, WHITE)
-    screen.blit(health_text, (20, 50))
-    health_text = health_font.render(f"Health: {antagonist.health}", True, WHITE)
-    screen.blit(health_text, (WIDTH-150, 50))
-    
-    # Draw question
-    question_text = question_font.render(current_question, True, WHITE)
+    # Question
+    question_text = font.render(current_question, True, WHITE)
     screen.blit(question_text, (WIDTH//2 - question_text.get_width()//2, 50))
     
-    # Draw buttons
+    # Answer buttons
     if not player.is_attacking and not antagonist.is_attacking:
         for button in buttons:
             button.draw(screen)
     
-    # Draw fighters with swords
+    # Draw fighters
     player.draw(screen)
     antagonist.draw(screen)
     
-    # Draw damage numbers
+    # Damage indicators
     if player.is_attacking and player.attack_progress > 0.9:
-        damage_text = health_font.render("-10", True, PLAYER_COLOR)
+        damage_text = damage_font.render("-10", True, RED)
         screen.blit(damage_text, (antagonist.x-15, antagonist.y-50))
     if antagonist.is_attacking and antagonist.attack_progress > 0.9:
-        damage_text = health_font.render("-10", True, ENEMY_COLOR)
+        damage_text = damage_font.render("-10", True, BLUE)
         screen.blit(damage_text, (player.x-15, player.y-50))
     
-    # Check for game over
+    # Game over checks
     if player.health <= 0 or antagonist.health <= 0:
         if player.health <= 0:
-            result = "You got killed by the Enemy"
-            color = ENEMY_COLOR
+            result = "DEFEAT!"
+            color = BLUE
         else:
-            result = "You have defeated an Enemy"
-            color = PLAYER_COLOR
+            result = "VICTORY!"
+            color = RED
         
-        game_over_text = question_font.render(result, True, color)
+        game_over_text = font.render(result, True, color)
         screen.blit(game_over_text, (WIDTH//2 - game_over_text.get_width()//2, HEIGHT//2))
         pygame.display.flip()
         pygame.time.wait(3000)

@@ -1,3 +1,4 @@
+'''Version 4 - Adding sticks and health bars '''
 import pygame
 import sys
 import math

@@ -1,4 +1,4 @@
-'''Version 5 - Fixing by the feedback '''
+'''Version 5 - Adding the Sword GUI '''
 import pygame
 import sys
 
@@ -15,19 +15,30 @@ class Player:
         self.is_circle = is_circle
         self.sword_offset_x = 15 
         self.sword_offset_y = 0
-        self.is_attacking = False
+        self.health = 100
+        self.last_movement = 'right' if is_player else 'left'
     
     def move(self, keys):
-        if keys[self.controls[0]] and self.x > self.size//2: 
+        moved = False
+        
+        if keys[self.controls[0]] and self.x > self.size//2:  # Left
             self.x -= 5
             self.facing_right = False
-        if keys[self.controls[1]] and self.x < WIDTH - self.size//2: 
+            self.last_movement = 'left'
+            moved = True
+        if keys[self.controls[1]] and self.x < WIDTH - self.size//2:  # Right
             self.x += 5
             self.facing_right = True
-        if keys[self.controls[2]] and self.y > self.size//2:  
+            self.last_movement = 'right'
+            moved = True
+        if keys[self.controls[2]] and self.y > self.size//2:  # Up
             self.y -= 5
-        if keys[self.controls[3]] and self.y < HEIGHT - self.size//2:  
+            moved = True
+        if keys[self.controls[3]] and self.y < HEIGHT - self.size//2:  # Down
             self.y += 5
+            moved = True
+            
+        return moved
     
     def draw(self, screen):
         # Draw player body
@@ -38,31 +49,19 @@ class Player:
                            (self.x - self.size//2, self.y - self.size//2, 
                             self.size, self.size))
         
-        # Draw sword
+        # Draw sword if available
         if self.sword_img:
-            if self.is_attacking:
-                sword = pygame.transform.rotate(self.sword_img, -45 if self.facing_right else 45)
-            else:
+            # Automatically face the direction of last movement
+            if self.last_movement == 'right':
                 sword = self.sword_img
-            
-            if not self.facing_right:
-                sword = pygame.transform.flip(sword, True, False)
-            
-            sword_pos = (self.x + self.size//2 - self.sword_offset_x if self.facing_right 
-                        else self.x - self.size//2 - sword.get_width() + self.sword_offset_x,
-                        self.y - sword.get_height()//2 + self.sword_offset_y)
+                sword_pos = (self.x + self.size//2 - self.sword_offset_x, 
+                            self.y - self.sword_img.get_height()//2 + self.sword_offset_y)
+            else:
+                sword = pygame.transform.flip(self.sword_img, True, False)
+                sword_pos = (self.x - self.size//2 - self.sword_img.get_width() + self.sword_offset_x, 
+                            self.y - self.sword_img.get_height()//2 + self.sword_offset_y)
             
             screen.blit(sword, sword_pos)
-        else:
-            # Fallback: draw simple sword shape
-            sword_length = self.size + 10
-            if self.facing_right:
-                end_x = self.x + self.size//2 + sword_length
-            else:
-                end_x = self.x - self.size//2 - sword_length
-            pygame.draw.line(screen, self.color, 
-                           (self.x, self.y), 
-                           (end_x, self.y), 3)
 
 def main():
     # Initialize Pygame
@@ -72,7 +71,7 @@ def main():
     global WIDTH, HEIGHT
     WIDTH, HEIGHT = 800, 600
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Circle vs Square Duel")
+    pygame.display.set_caption("Samurai Math")
     
     # Colors
     BACKGROUND = (30, 30, 40)
@@ -85,7 +84,7 @@ def main():
         sword_img = pygame.image.load("Sword_Enemy.png").convert_alpha()
         sword_img = pygame.transform.scale(sword_img, (60, 60))
         player_sword = sword_img
-        antagonist_sword = pygame.transform.flip(sword_img, True, False)
+        antagonist_sword = sword_img  # Use same image, facing will be handled in drawing
     except:
         print("Sword image not found, using rectangles")
         sword_img = None
@@ -100,6 +99,10 @@ def main():
                     [pygame.K_a, pygame.K_d, pygame.K_w, pygame.K_s], player_sword, True)
     player2 = Player(2*WIDTH//3, HEIGHT//2, 50, BLUE, False,
                     [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN], antagonist_sword, False)
+    
+    # Make square player face left initially
+    player2.facing_right = False
+    player2.last_movement = 'left'
     
     clock = pygame.time.Clock()
     
@@ -119,15 +122,6 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
-                elif event.key == pygame.K_SPACE:
-                    player1.is_attacking = True
-                elif event.key == pygame.K_RCTRL:
-                    player2.is_attacking = True
-            elif event.type == pygame.KEYUP:
-                if event.key == pygame.K_SPACE:
-                    player1.is_attacking = False
-                elif event.key == pygame.K_RCTRL:
-                    player2.is_attacking = False
         
         # Handle keyboard input
         keys = pygame.key.get_pressed()

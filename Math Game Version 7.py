@@ -1,4 +1,4 @@
-'''Version 6 - from simple math to year 7 math '''
+'''Version 7 - from simple math to year 7 math '''
 import pygame
 import sys
 import random

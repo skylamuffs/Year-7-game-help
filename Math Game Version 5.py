@@ -1,6 +1,7 @@
 '''Version 5 - Adding the Sword GUI '''
 import pygame
 import sys
+import math
 
 class Player:
     def __init__(self, x, y, size, color, is_player, controls, sword_img, is_circle=True):
@@ -17,6 +18,10 @@ class Player:
         self.sword_offset_y = 0
         self.health = 100
         self.last_movement = 'right' if is_player else 'left'
+        self.attacking = False
+        self.attack_cooldown = 0
+        self.attack_duration = 15
+        self.attack_range = 70
     
     def move(self, keys):
         moved = False
@@ -38,7 +43,42 @@ class Player:
             self.y += 5
             moved = True
             
+        # Attack controls (Space for player 1, RCTRL for player 2)
+        attack_key = pygame.K_SPACE if self.is_player else pygame.K_RCTRL
+        if keys[attack_key] and self.attack_cooldown == 0:
+            self.attacking = True
+            self.attack_cooldown = self.attack_duration + 20  # Attack duration + cooldown
+            
         return moved
+    
+    def update(self):
+        if self.attack_cooldown > 0:
+            self.attack_cooldown -= 1
+            if self.attack_cooldown <= 20:  # After attack duration
+                self.attacking = False
+    
+    def get_sword_position(self):
+        if self.last_movement == 'right':
+            return (self.x + self.size//2, self.y)
+        else:
+            return (self.x - self.size//2, self.y)
+    
+    def check_sword_hit(self, other_player):
+        if not self.attacking or self.attack_cooldown > 20:  # Only during active attack frames
+            return False
+            
+        # Get sword position
+        sword_x, sword_y = self.get_sword_position()
+        
+        # Calculate distance to other player
+        distance = math.sqrt((sword_x - other_player.x)**2 + (sword_y - other_player.y)**2)
+        
+        # Check if sword is in range and facing the opponent
+        if distance < self.attack_range:
+            if (self.last_movement == 'right' and self.x < other_player.x) or \
+               (self.last_movement == 'left' and self.x > other_player.x):
+                return True
+        return False
     
     def draw(self, screen):
         # Draw player body
@@ -61,7 +101,19 @@ class Player:
                 sword_pos = (self.x - self.size//2 - self.sword_img.get_width() + self.sword_offset_x, 
                             self.y - self.sword_img.get_height()//2 + self.sword_offset_y)
             
+            # Add attack animation effect
+            if self.attacking and self.attack_cooldown > 20:
+                if self.last_movement == 'right':
+                    sword_pos = (sword_pos[0] + 10, sword_pos[1])
+                else:
+                    sword_pos = (sword_pos[0] - 10, sword_pos[1])
+            
             screen.blit(sword, sword_pos)
+        
+        # Draw health bar above player
+        pygame.draw.rect(screen, WHITE, (self.x - 50, self.y - 60, 100, 10))
+        health_width = int((self.health / 100) * 100)
+        pygame.draw.rect(screen, self.color, (self.x - 50, self.y - 60, health_width, 10))
 
 def main():
     # Initialize Pygame
@@ -74,6 +126,7 @@ def main():
     pygame.display.set_caption("Samurai Math")
     
     # Colors
+    global WHITE
     BACKGROUND = (30, 30, 40)
     RED = (255, 80, 80)
     BLUE = (80, 80, 255)
@@ -108,10 +161,10 @@ def main():
     
     def draw_ui():
         """Draw user interface elements"""
-        p1_text = game_font.render("Player 1 (Circle): WASD", True, RED)
-        p2_text = game_font.render("Player 2 (Square): Arrows", True, BLUE)
+        p1_text = game_font.render("Player 1 (Circle): WASD + SPACE", True, RED)
+        p2_text = game_font.render("Player 2 (Square): Arrows + RCTRL", True, BLUE)
         screen.blit(p1_text, (20, 20))
-        screen.blit(p2_text, (WIDTH - 220, 20))
+        screen.blit(p2_text, (WIDTH - 250, 20))
     
     running = True
     while running:
@@ -128,15 +181,40 @@ def main():
         player1.move(keys)
         player2.move(keys)
         
+        # Update player states
+        player1.update()
+        player2.update()
+        
+        # Check for sword hits
+        if player1.check_sword_hit(player2):
+            player2.health = max(0, player2.health - 10)
+        
+        if player2.check_sword_hit(player1):
+            player1.health = max(0, player1.health - 10)
+        
         # Fill screen with dark background
         screen.fill(BACKGROUND)
         
-        # Draw players
+        # Draw players (including their health bars)
         player1.draw(screen)
         player2.draw(screen)
         
         # Draw UI
         draw_ui()
+        
+        # Game over check
+        if player1.health <= 0 or player2.health <= 0:
+            font = pygame.font.SysFont(None, 72)
+            if player1.health <= 0 and player2.health <= 0:
+                text = font.render("DRAW!", True, WHITE)
+            elif player1.health <= 0:
+                text = font.render("BLUE WINS!", True, BLUE)
+            else:
+                text = font.render("RED WINS!", True, RED)
+            screen.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - text.get_height()//2))
+            pygame.display.flip()
+            pygame.time.wait(3000)
+            running = False
         
         # Update display
         pygame.display.flip()

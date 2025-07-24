@@ -8,7 +8,7 @@ from fractions import Fraction
 pygame.init()
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Samurai Math Duel")
+pygame.display.set_caption("Samurai Math")
 
 # Colors
 BACKGROUND = (30, 30, 40)

@@ -95,11 +95,14 @@ class Fighter:
         self.speed = 5
         
     def draw(self, surface):
-        # Draw fighter body
-        pygame.draw.rect(surface, self.color, 
-                       (self.x - self.size//2, 
-                        self.y - self.size//2, 
-                        self.size, self.size))
+        # Draw fighter body - circle for player, rectangle for enemy
+        if self.is_player:
+            pygame.draw.circle(surface, self.color, (self.x, self.y), self.size//2)
+        else:
+            pygame.draw.rect(surface, self.color, 
+                           (self.x - self.size//2, 
+                            self.y - self.size//2, 
+                            self.size, self.size))
         
         # Draw sword if image exists
         if sword_img:

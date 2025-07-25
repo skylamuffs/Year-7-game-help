@@ -1,5 +1,4 @@
 '''Version 6 - adding math problems '''
-
 import pygame
 import sys
 import random
@@ -41,11 +40,14 @@ class Fighter:
         self.is_player = is_player
         
     def draw(self, surface):
-        # Draw fighter body
-        pygame.draw.rect(surface, self.color, 
-                        (self.x - self.size//2, 
-                         self.y - self.size//2, 
-                         self.size, self.size))
+        # Draw fighter body - circle for player, rectangle for enemy
+        if self.is_player:
+            pygame.draw.circle(surface, self.color, (self.x, self.y), self.size//2)
+        else:
+            pygame.draw.rect(surface, self.color, 
+                           (self.x - self.size//2, 
+                            self.y - self.size//2, 
+                            self.size, self.size))
         
         # Draw sword
         if sword_img:

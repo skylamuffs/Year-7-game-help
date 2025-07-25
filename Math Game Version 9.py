@@ -1,4 +1,4 @@
-'''Version 8 - Adding a title page'''
+'''Version 9 - Adding warning image to inform the players'''
 import pygame
 import sys
 import random
@@ -16,7 +16,8 @@ BACKGROUND = (30, 30, 40)
 PLAYER_COLOR = (255, 80, 80)    # Red
 ENEMY_COLOR = (80, 80, 255)     # Blue
 WHITE = (255, 255, 255)
-TITLE_COLOR = (255, 215, 0)     # Color for text
+TITLE_COLOR = (255, 215, 0)     # Gold color for text
+BLACK = (0, 0, 0)
 
 # Fonts
 title_font = pygame.font.SysFont('Arial', 64, bold=True)
@@ -26,6 +27,9 @@ button_font = pygame.font.SysFont('Arial', 24)
 health_font = pygame.font.SysFont('Arial', 20, bold=True)
 start_font = pygame.font.SysFont('Arial', 28, bold=True)
 result_font = pygame.font.SysFont('Arial', 48, bold=True)
+warning_font_large = pygame.font.SysFont('Arial', 72, bold=True)
+warning_font = pygame.font.SysFont('Arial', 28)
+warning_font_small = pygame.font.SysFont('Arial', 24)
 
 # Load images
 def load_image(filename, scale=None, alpha=True):
@@ -50,8 +54,9 @@ else:
     print("Using rectangles instead of sword images")
 
 title_background = load_image("Title_page.jpg", (WIDTH, HEIGHT), alpha=False)
-game_over_img = load_image("Game_Over.jpg", (WIDTH, HEIGHT))  
-victory_img = load_image("Win.jpg", (WIDTH, HEIGHT))          
+game_over_img = load_image("Game_Over.jpg", (WIDTH, HEIGHT))  # Full screen
+victory_img = load_image("Win.jpg", (WIDTH, HEIGHT))          # Full screen
+warning_img = load_image("Warning.png", (WIDTH, HEIGHT))      # Warning image
 
 # Title Screen Button
 class StartButton:
@@ -75,6 +80,95 @@ class StartButton:
     
     def is_clicked(self, event):
         return event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.rect.collidepoint(event.pos)
+
+def fade_in_out_warning():
+    clock = pygame.time.Clock()
+    fade_surface = pygame.Surface((WIDTH, HEIGHT))
+    fade_surface.fill(BLACK)
+    
+    # Fade in (0 to 255)
+    for alpha in range(0, 256, 5):
+        if warning_img:
+            screen.blit(warning_img, (0, 0))
+        else:
+            screen.fill(BLACK)
+            warning_title = warning_font_large.render("WARNING", True, (255, 80, 80))
+            screen.blit(warning_title, (WIDTH//2 - warning_title.get_width()//2, HEIGHT//4))
+        
+        fade_surface.set_alpha(255 - alpha)  # Inverse for fade in
+        screen.blit(fade_surface, (0, 0))
+        pygame.display.flip()
+        clock.tick(60)
+        
+        # Check for skip
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                return
+    
+    # Display at full opacity for 2 seconds
+    if warning_img:
+        screen.blit(warning_img, (0, 0))
+    else:
+        screen.fill(BLACK)
+        warning_title = warning_font_large.render("WARNING", True, (255, 80, 80))
+        screen.blit(warning_title, (WIDTH//2 - warning_title.get_width()//2, HEIGHT//4))
+        
+        warning_lines = [
+            "This game contains intense math battles!",
+            "Prepare your brain for the challenge!",
+            "",
+            "Press any key to continue..."
+        ]
+        
+        for i, line in enumerate(warning_lines):
+            text = warning_font.render(line, True, WHITE)
+            screen.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 + i * 40))
+    
+    pygame.display.flip()
+    
+    # Wait for 2 seconds or until key press
+    start_time = pygame.time.get_ticks()
+    waiting = True
+    while waiting:
+        current_time = pygame.time.get_ticks()
+        if current_time - start_time > 2000:  # 2 seconds
+            waiting = False
+            
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                waiting = False
+        clock.tick(60)
+    
+    # Fade out (255 to 0)
+    for alpha in range(0, 256, 5):
+        if warning_img:
+            screen.blit(warning_img, (0, 0))
+        else:
+            screen.fill(BLACK)
+            warning_title = warning_font_large.render("WARNING", True, (255, 80, 80))
+            screen.blit(warning_title, (WIDTH//2 - warning_title.get_width()//2, HEIGHT//4))
+            
+            warning_lines = [
+                "This game contains intense math battles!",
+                "Prepare your brain for the challenge!",
+                "",
+                "Press any key to continue..."
+            ]
+            
+            for i, line in enumerate(warning_lines):
+                text = warning_font.render(line, True, WHITE)
+                screen.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 + i * 40))
+        
+        fade_surface.set_alpha(alpha)  # Normal for fade out
+        screen.blit(fade_surface, (0, 0))
+        pygame.display.flip()
+        clock.tick(60)
 
 # Math Question Generator
 def generate_math_question():
@@ -178,7 +272,7 @@ class Fighter:
                 return True
         return False
 
-# AnswerButton class
+# AnswerButton
 class AnswerButton:
     def __init__(self, x, y, width, height, answer, index):
         self.rect = pygame.Rect(x, y, width, height)
@@ -221,8 +315,10 @@ def show_title_screen():
                     pygame.quit()
                     sys.exit()
                 if event.key == pygame.K_RETURN:
+                    fade_in_out_warning()
                     waiting = False
             if start_button.is_clicked(event):
+                fade_in_out_warning()
                 waiting = False
         
         if title_background:

@@ -1,12 +1,15 @@
-'''Version 9 - Adding warning image to inform the players'''
+'''Version 10 - Adding voice-over and background images after warning'''
+'''Samurai Math Game - Complete Working Version'''
 import pygame
 import sys
 import random
 from fractions import Fraction
 import os
+import time
 
 # Initialize pygame
 pygame.init()
+pygame.mixer.init()
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Samurai Math")
@@ -16,7 +19,7 @@ BACKGROUND = (30, 30, 40)
 PLAYER_COLOR = (255, 80, 80)    # Red
 ENEMY_COLOR = (80, 80, 255)     # Blue
 WHITE = (255, 255, 255)
-TITLE_COLOR = (255, 215, 0)     # Gold color for text
+TITLE_COLOR = (255, 215, 0)     # Gold
 BLACK = (0, 0, 0)
 
 # Fonts
@@ -29,9 +32,8 @@ start_font = pygame.font.SysFont('Arial', 28, bold=True)
 result_font = pygame.font.SysFont('Arial', 48, bold=True)
 warning_font_large = pygame.font.SysFont('Arial', 72, bold=True)
 warning_font = pygame.font.SysFont('Arial', 28)
-warning_font_small = pygame.font.SysFont('Arial', 24)
 
-# Load images
+# Load images with error handling
 def load_image(filename, scale=None, alpha=True):
     try:
         if alpha:
@@ -41,22 +43,154 @@ def load_image(filename, scale=None, alpha=True):
         if scale:
             img = pygame.transform.scale(img, scale)
         return img
-    except:
-        print(f"Image {filename} not found")
-        return None
+    except pygame.error as e:
+        print(f"Error loading image {filename}: {e}")
+        if scale:
+            surf = pygame.Surface(scale, pygame.SRCALPHA if alpha else 0)
+        else:
+            surf = pygame.Surface((100, 100), pygame.SRCALPHA if alpha else 0)
+        surf.fill((0, 0, 0, 0))
+        return surf
 
-# Load images with full screen size for victory/game over
-sword_img = load_image("Sword_Enemy.png", (60, 60))
-if sword_img:
-    player_sword = sword_img
-    antagonist_sword = pygame.transform.flip(sword_img, True, False)
-else:
-    print("Using rectangles instead of sword images")
+# Load game images (using placeholder if files not found)
+sword_img = load_image("Sword_Enemy.png", (60, 60)) or pygame.Surface((60, 60), pygame.SRCALPHA)
+player_sword = sword_img
+antagonist_sword = pygame.transform.flip(sword_img, True, False)
 
-title_background = load_image("Title_page.jpg", (WIDTH, HEIGHT), alpha=False)
-game_over_img = load_image("Game_Over.jpg", (WIDTH, HEIGHT)) 
-victory_img = load_image("Win.jpg", (WIDTH, HEIGHT))          
-warning_img = load_image("Warning.png", (WIDTH, HEIGHT))      
+title_background = load_image("Title_page.jpg", (WIDTH, HEIGHT), alpha=False) or pygame.Surface((WIDTH, HEIGHT))
+game_over_img = load_image("Game_Over.jpg", (WIDTH, HEIGHT)) or pygame.Surface((WIDTH, HEIGHT))
+victory_img = load_image("Win.jpg", (WIDTH, HEIGHT)) or pygame.Surface((WIDTH, HEIGHT))
+warning_img = load_image("Warning.png", (WIDTH, HEIGHT)) or pygame.Surface((WIDTH, HEIGHT))
+
+# Story Narration System
+class StoryNarration:
+    def __init__(self):
+        self.story_segments = [
+            {
+                "audio": "Voice_1.mp3",
+                "duration": 23.0,
+                "images": [
+                    ("Voice_1_image.png", 8.0),
+                    ("Voice_1_image_2.png", 7.5),
+                    ("Voice_1_image_3.png", 7.5)
+                ]
+            },
+            {
+                "audio": "Voice_2.mp3",
+                "duration": 21.0,
+                "images": [
+                    ("Voice_2_image.png", 7.0),
+                    ("Voice_2_image_2.png", 7.0),
+                    ("Voice_2_image_3.png", 7.0)
+                ]
+            },
+            {
+                "audio": "Voice_3.mp3",
+                "duration": 15.0,
+                "images": [
+                    ("Voice_3_image.png", 15.0)
+                ]
+            },
+            {
+                "audio": "Voice_4.mp3",
+                "duration": 21.0,
+                "images": [
+                    ("Voice_4_image.png", 10.0),
+                    ("Voice_4_image_2.png", 11.0)
+                ]
+            }
+        ]
+        self.current_segment = 0
+        self.current_image = 0
+        self.active = False
+        self.sounds = []
+        self.images = {}
+        self.start_time = 0
+        self.image_start_time = 0
+        self.load_assets()
+        
+    def load_assets(self):
+        """Pre-load all story assets"""
+        for segment in self.story_segments:
+            for img_file, _ in segment["images"]:
+                if img_file not in self.images:
+                    loaded_img = load_image(img_file, (WIDTH, HEIGHT))
+                    self.images[img_file] = loaded_img if loaded_img else pygame.Surface((WIDTH, HEIGHT))
+        
+        for segment in self.story_segments:
+            audio_file = segment["audio"]
+            try:
+                if os.path.exists(audio_file):
+                    sound = pygame.mixer.Sound(audio_file)
+                    self.sounds.append(sound)
+                else:
+                    print(f"Audio file not found: {audio_file}")
+                    self.sounds.append(None)
+            except pygame.error as e:
+                print(f"Error loading sound {audio_file}: {e}")
+                self.sounds.append(None)
+    
+    def start(self):
+        self.current_segment = 0
+        self.current_image = 0
+        self.active = True
+        self.start_time = time.time()
+        self.image_start_time = time.time()
+        self.play_current_audio()
+    
+    def play_current_audio(self):
+        """Play the current segment's audio"""
+        pygame.mixer.stop()
+        if 0 <= self.current_segment < len(self.sounds) and self.sounds[self.current_segment]:
+            self.sounds[self.current_segment].play()
+    
+    def update_image(self):
+        """Check if should advance to next image in sequence"""
+        segment = self.story_segments[self.current_segment]
+        current_image_duration = segment["images"][self.current_image][1]
+        
+        if time.time() - self.image_start_time > current_image_duration:
+            self.current_image += 1
+            self.image_start_time = time.time()
+            
+            if self.current_image >= len(segment["images"]):
+                self.next_segment()
+    
+    def next_segment(self):
+        """Move to next story segment"""
+        pygame.mixer.stop()
+        self.current_segment += 1
+        self.current_image = 0
+        self.image_start_time = time.time()
+        self.start_time = time.time()
+        
+        if self.current_segment < len(self.story_segments):
+            self.play_current_audio()
+        else:
+            self.active = False
+    
+    def update(self):
+        if not self.active:
+            return False
+            
+        segment = self.story_segments[self.current_segment]
+        
+        if time.time() - self.start_time > segment["duration"]:
+            self.next_segment()
+        else:
+            self.update_image()
+        
+        return self.active
+    
+    def draw(self, surface):
+        if not self.active:
+            return
+            
+        segment = self.story_segments[self.current_segment]
+        img_file = segment["images"][self.current_image][0]
+        bg = self.images.get(img_file, pygame.Surface((WIDTH, HEIGHT)))
+        
+        surface.blit(bg, (0, 0))
 
 # Title Screen Button
 class StartButton:
@@ -86,7 +220,7 @@ def fade_in_out_warning():
     fade_surface = pygame.Surface((WIDTH, HEIGHT))
     fade_surface.fill(BLACK)
     
-    # Fade in (0 to 255)
+    # Fade in
     for alpha in range(0, 256, 5):
         if warning_img:
             screen.blit(warning_img, (0, 0))
@@ -95,12 +229,11 @@ def fade_in_out_warning():
             warning_title = warning_font_large.render("WARNING", True, (255, 80, 80))
             screen.blit(warning_title, (WIDTH//2 - warning_title.get_width()//2, HEIGHT//4))
         
-        fade_surface.set_alpha(255 - alpha)  # Inverse for fade in
+        fade_surface.set_alpha(255 - alpha)
         screen.blit(fade_surface, (0, 0))
         pygame.display.flip()
         clock.tick(60)
         
-        # Check for skip
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -108,7 +241,7 @@ def fade_in_out_warning():
             if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
                 return
     
-    # Display at full opacity for 2 seconds
+    # Display warning
     if warning_img:
         screen.blit(warning_img, (0, 0))
     else:
@@ -129,12 +262,12 @@ def fade_in_out_warning():
     
     pygame.display.flip()
     
-    # Wait for 2 seconds or until key press
+    # Wait for 2 seconds or key press
     start_time = pygame.time.get_ticks()
     waiting = True
     while waiting:
         current_time = pygame.time.get_ticks()
-        if current_time - start_time > 2000:  # 2 seconds
+        if current_time - start_time > 2000:
             waiting = False
             
         for event in pygame.event.get():
@@ -145,7 +278,7 @@ def fade_in_out_warning():
                 waiting = False
         clock.tick(60)
     
-    # Fade out (255 to 0)
+    # Fade out
     for alpha in range(0, 256, 5):
         if warning_img:
             screen.blit(warning_img, (0, 0))
@@ -165,12 +298,11 @@ def fade_in_out_warning():
                 text = warning_font.render(line, True, WHITE)
                 screen.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 + i * 40))
         
-        fade_surface.set_alpha(alpha)  # Normal for fade out
+        fade_surface.set_alpha(alpha)
         screen.blit(fade_surface, (0, 0))
         pygame.display.flip()
         clock.tick(60)
 
-# Math Question Generator
 def generate_math_question():
     question_type = random.choice([
         'fraction_addition', 
@@ -206,7 +338,6 @@ def generate_math_question():
         question = f"Find {frac} of {quantity}"
         answer = frac * quantity
     
-    # Generate wrong answers
     answers = [answer]
     while len(answers) < 3:
         if isinstance(answer, (int, float)):
@@ -220,7 +351,6 @@ def generate_math_question():
     random.shuffle(answers)
     return question, answer, answers
 
-# Fighter class
 class Fighter:
     def __init__(self, x, y, size, color, is_player):
         self.x = x
@@ -272,7 +402,6 @@ class Fighter:
                 return True
         return False
 
-# AnswerButton
 class AnswerButton:
     def __init__(self, x, y, width, height, answer, index):
         self.rect = pygame.Rect(x, y, width, height)
@@ -302,9 +431,14 @@ class AnswerButton:
         return event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.rect.collidepoint(event.pos)
 
 def show_title_screen():
+    global story
     start_button = StartButton()
-    waiting = True
     
+    if not hasattr(show_title_screen, "story_shown"):
+        story.start()
+        show_title_screen.story_shown = True
+    
+    waiting = True
     while waiting:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -315,29 +449,50 @@ def show_title_screen():
                     pygame.quit()
                     sys.exit()
                 if event.key == pygame.K_RETURN:
+                    story.active = False
                     fade_in_out_warning()
                     waiting = False
+                else:
+                    story.active = False
             if start_button.is_clicked(event):
+                story.active = False
                 fade_in_out_warning()
                 waiting = False
         
-        if title_background:
-            screen.blit(title_background, (0, 0))
+        if story.active:
+            if not story.update():
+                story.active = False
+        
+        if story.active:
+            story.draw(screen)
         else:
-            screen.fill(BACKGROUND)
+            if title_background:
+                screen.blit(title_background, (0, 0))
+            else:
+                screen.fill(BACKGROUND)
+            
+            title_text = title_font.render("SAMURAI MATH", True, TITLE_COLOR)
+            subtitle_text = subtitle_font.render("Year 7 Math Challenge", True, WHITE)
+            
+            screen.blit(title_text, (WIDTH//2 - title_text.get_width()//2, HEIGHT//4))
+            screen.blit(subtitle_text, (WIDTH//2 - subtitle_text.get_width()//2, HEIGHT//3 + 60))
+            
+            start_button.draw(screen)
         
-        title_text = title_font.render("SAMURAI MATH", True, TITLE_COLOR)
-        subtitle_text = subtitle_font.render("Year 7 Math Challenge", True, WHITE)
-        
-        screen.blit(title_text, (WIDTH//2 - title_text.get_width()//2, HEIGHT//4))
-        screen.blit(subtitle_text, (WIDTH//2 - subtitle_text.get_width()//2, HEIGHT//3 + 60))
-        
-        start_button.draw(screen)
         pygame.display.flip()
 
 def show_game_over_screen(player_won):
     waiting = True
     clock = pygame.time.Clock()
+    
+    try:
+        if player_won:
+            sound = pygame.mixer.Sound("victory.wav")
+        else:
+            sound = pygame.mixer.Sound("defeat.wav")
+        sound.play()
+    except:
+        print("Could not play game over sound")
     
     while waiting:
         for event in pygame.event.get():
@@ -408,7 +563,7 @@ def main_game():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
-                    return False  # Return to title screen
+                    return False
             
             if not player.is_attacking and not antagonist.is_attacking:
                 for button in buttons:
@@ -465,19 +620,25 @@ def main_game():
         pygame.display.flip()
         clock.tick(60)
     
-    return True  # Game ended naturally
+    return True
 
-# Main game loop
 def main():
+    global story
     try:
+        # Initialize story narration
+        story = StoryNarration()
+        
         show_title_screen()
         while True:
             if not main_game():
                 show_title_screen()
     except SystemExit:
         pass
+    except Exception as e:
+        print(f"Error in main game loop: {e}")
     finally:
         pygame.quit()
+        sys.exit()
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,4 @@
-'''Version 11 - Adding Tutorial System'''
+'''Version 12 - Adding Animated Character Scene'''
 import pygame
 import sys
 import random
@@ -42,6 +42,22 @@ HEART_SPACING = 5
 MAX_HEALTH = 100
 HEARTS = 5
 HEALTH_PER_HEART = MAX_HEALTH // HEARTS
+
+def generate_sound(frequency, duration):
+    """Generate a simple tone for game events (numpy-free version)"""
+    sample_rate = 22050
+    n_samples = int(sample_rate * duration)
+    buf = bytearray(n_samples * 2)  # 16-bit = 2 bytes per sample
+    
+    for s in range(n_samples):
+        t = float(s)/sample_rate
+        val = int(32767.0*math.sin(2.0*math.pi*frequency*t))
+        # Convert to 16-bit little-endian
+        buf[2*s] = val & 0xff
+        buf[2*s+1] = (val >> 8) & 0xff
+    
+    sound = pygame.mixer.Sound(buffer=bytes(buf))
+    return sound
 
 def load_image(filename, scale=None, alpha=True):
     try:
@@ -102,20 +118,101 @@ if not os.path.exists("heart_empty.png"):
         (HEART_SIZE//6, HEART_SIZE//2)
     ], 2)
 
-def generate_sound(frequency=440, duration=0.5, volume=0.5):
-    """Generate a simple sine wave sound using pygame"""
-    sample_rate = 22050
-    samples = int(sample_rate * duration)
-    buffer = pygame.sndarray.make_sound(bytearray(samples * 2))
+class PlayerAnimation:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.frames = []
+        self.current_frame = 0
+        self.animation_speed = 0.2
+        self.frame_counter = 0
+        self.direction = 1  # 1 for right, -1 for left
+        self.speed = 5
+        self.load_frames()
+        self.width = 100  # Default width if images fail to load
+        self.height = 150  # Default height if images fail to load
+        
+    def load_frames(self):
+        for i in range(1, 7):  # Assuming files are named Player_1.png to Player_6.png
+            try:
+                frame = load_image(f"Player_ ({i}).png")
+                if frame:
+                    self.frames.append(frame)
+                    # Update dimensions based on first loaded frame
+                    if i == 1:
+                        self.width = frame.get_width()
+                        self.height = frame.get_height()
+            except:
+                print(f"Failed to load Player_ ({i}).png")
+                # Create placeholder if image fails to load
+                surf = pygame.Surface((100, 150), pygame.SRCALPHA)
+                pygame.draw.rect(surf, (255, 0, 0), (0, 0, 100, 150))
+                self.frames.append(surf)
+        
+        # Ensure we have 6 frames
+        while len(self.frames) < 6:
+            surf = pygame.Surface((100, 150), pygame.SRCALPHA)
+            pygame.draw.rect(surf, (255, 0, 0), (0, 0, 100, 150))
+            self.frames.append(surf)
     
-    # Manually generate sine wave
-    for i in range(samples):
-        t = float(i) / sample_rate
-        wave = int(32767 * volume * math.sin(2 * math.pi * frequency * t))
-        # Write to both channels (stereo)
-        buffer.set_at(i, (wave, wave))
+    def update(self):
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_d]:
+            self.x += self.speed
+            self.direction = 1
+            self.frame_counter += self.animation_speed
+        elif keys[pygame.K_a]:
+            self.x -= self.speed
+            self.direction = -1
+            self.frame_counter += self.animation_speed
+        else:
+            self.frame_counter = 0
+            self.current_frame = 0
+        
+        # Keep player on screen
+        self.x = max(self.width//2, min(WIDTH - self.width//2, self.x))
+        
+        # Update animation frame
+        if self.frame_counter >= 1:
+            self.current_frame = (self.current_frame + 1) % len(self.frames)
+            self.frame_counter = 0
     
-    return buffer
+    def draw(self, surface):
+        current_image = self.frames[self.current_frame]
+        if self.direction == -1:  # Flip if facing left
+            current_image = pygame.transform.flip(current_image, True, False)
+        surface.blit(current_image, (self.x - self.width//2, self.y - self.height//2))
+
+class AnimatedBackground:
+    def __init__(self, base_name="Background_1 ", num_frames=70):
+        self.base_name = base_name
+        self.num_frames = num_frames
+        self.frames = []
+        self.current_frame = 0
+        self.animation_speed = 0.5
+        self.frame_counter = 0
+        self.load_frames()
+        
+    def load_frames(self):
+        for i in range(1, self.num_frames + 1):
+            try:
+                img = load_image(f"{self.base_name}({i}).jpg", (WIDTH, HEIGHT), alpha=False)
+                self.frames.append(img)
+            except:
+                # Create gradient placeholder if image not found
+                surf = pygame.Surface((WIDTH, HEIGHT))
+                color = (i % 255, (i * 2) % 255, (i * 3) % 255)
+                pygame.draw.rect(surf, color, (0, 0, WIDTH, HEIGHT))
+                self.frames.append(surf)
+    
+    def update(self):
+        self.frame_counter += self.animation_speed
+        if self.frame_counter >= 1:
+            self.current_frame = (self.current_frame + 1) % self.num_frames
+            self.frame_counter = 0
+    
+    def draw(self, surface):
+        surface.blit(self.frames[self.current_frame], (0, 0))
 
 class StoryNarration:
     def __init__(self):
@@ -507,10 +604,10 @@ def generate_math_question():
         answer = l * w
     
     elif category == 'geometry':
-        shapes = ["△", "□", "⬠"]
+        shapes = ["triangle", "square", "pentagon"]
         shape = random.choice(shapes)
         question = f"Angles in {shape} sum to ?°"
-        answer = 180 if "△" in shape else 360 if "□" in shape else 540
+        answer = 180 if "triangle" in shape else 360 if "square" in shape else 540
     
     elif category == 'statistics':
         nums = sorted([random.randint(10, 50) for _ in range(4)])
@@ -593,10 +690,10 @@ def generate_nz_math_question():
     
     # Geometry problems (simplified)
     elif category == 'geometry':
-        shapes = ["△", "□", "⬠"]  # Simple shape symbols
+        shapes = ["triangle", "square", "pentagon"]  # Simple shape names
         shape = random.choice(shapes)
         question = f"Angles in {shape} sum to ?°"
-        answer = 180 if "△" in shape else 360 if "□" in shape else 540
+        answer = 180 if "triangle" in shape else 360 if "square" in shape else 540
     
     # Statistics problems
     elif category == 'statistics':
@@ -638,12 +735,20 @@ class Fighter:
         self.attack_progress = 0
         self.is_player = is_player
         self.speed = 5 * (WIDTH / 800)
+        # Load player animation if this is the player
+        if is_player:
+            self.animation = PlayerAnimation(x, y)
         
     def draw(self, surface):
-        pygame.draw.rect(surface, self.color, 
-                       (self.x - self.size//2, 
-                        self.y - self.size//2, 
-                        self.size, self.size))
+        if self.is_player and hasattr(self, 'animation'):
+            # Draw animated player
+            self.animation.draw(surface)
+        else:
+            # Draw enemy as rectangle
+            pygame.draw.rect(surface, self.color, 
+                           (self.x - self.size//2, 
+                            self.y - self.size//2, 
+                            self.size, self.size))
         
         if sword_img:
             if self.is_attacking:
@@ -670,6 +775,11 @@ class Fighter:
         return self.health <= 0
             
     def update(self, target):
+        if self.is_player and hasattr(self, 'animation'):
+            self.animation.x = self.x
+            self.animation.y = self.y
+            self.animation.update()
+        
         if self.is_attacking:
             self.attack_progress += 0.08
             self.x = self.original_pos[0] + (target.x - self.original_pos[0]) * self.attack_progress
@@ -823,6 +933,44 @@ def show_title_screen():
         
         pygame.display.flip()
 
+def show_character_scene():
+    """New function to show the animated character scene"""
+    player = PlayerAnimation(WIDTH//2, HEIGHT - 150)
+    background = AnimatedBackground()
+    
+    instruction_font = pygame.font.SysFont('Arial', 32, bold=True)
+    instruction_text = instruction_font.render("Press ENTER to start math battle!", True, WHITE)
+    
+    running = True
+    clock = pygame.time.Clock()
+    
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return False
+                if event.key == pygame.K_RETURN:
+                    return True
+        
+        # Update animations
+        player.update()
+        background.update()
+        
+        # Draw everything
+        background.draw(screen)
+        player.draw(screen)
+        
+        # Draw instruction text
+        screen.blit(instruction_text, (WIDTH//2 - instruction_text.get_width()//2, 50))
+        
+        pygame.display.flip()
+        clock.tick(60)
+    
+    return False
+
 def main_game():
     player = Fighter(WIDTH//4, HEIGHT//2, 60, PLAYER_COLOR, True)
     antagonist = Fighter(3*WIDTH//4, HEIGHT//2, 60, ENEMY_COLOR, False)
@@ -913,7 +1061,11 @@ def main():
         
         show_title_screen()
         while True:
-            if not main_game():
+            # Show character scene before math battle
+            if show_character_scene():
+                if not main_game():
+                    show_title_screen()
+            else:
                 show_title_screen()
     except SystemExit:
         pass

@@ -1,15 +1,15 @@
-'''Samurai Math Game - Complete Version with Sound Effects'''
+"""Version 14 - Adding transition to the next level"""
 import pygame
 import sys
 import random
 import os
 import time
-import numpy
+import math
 from fractions import Fraction
 
 # Initialize pygame
 pygame.init()
-pygame.mixer.init()
+pygame.mixer.init(frequency=22050, size=-16, channels=2)
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Samurai Math")
@@ -35,7 +35,14 @@ warning_font_large = pygame.font.SysFont('Arial', 72, bold=True)
 warning_font = pygame.font.SysFont('Arial', 28)
 tutorial_font = pygame.font.SysFont('Arial', 22)
 tutorial_title_font = pygame.font.SysFont('Arial', 36, bold=True)
-tutorial_math_font = pygame.font.SysFont('Arial', 24, bold=True)
+pixel_font = pygame.font.SysFont('Arial', 24)
+
+# Heart settings
+HEART_SIZE = 30
+HEART_SPACING = 5
+MAX_HEALTH = 100
+HEARTS = 5
+HEALTH_PER_HEART = MAX_HEALTH // HEARTS
 
 def load_image(filename, scale=None, alpha=True):
     try:
@@ -64,19 +71,68 @@ title_background = load_image("Title_page.jpg", (WIDTH, HEIGHT), alpha=False) or
 game_over_img = load_image("Game_Over.jpg", (WIDTH, HEIGHT)) or pygame.Surface((WIDTH, HEIGHT))
 victory_img = load_image("Win.jpg", (WIDTH, HEIGHT)) or pygame.Surface((WIDTH, HEIGHT))
 warning_img = load_image("Warning.png", (WIDTH, HEIGHT)) or pygame.Surface((WIDTH, HEIGHT))
+level1_bg = load_image("Level_1.jpg", (WIDTH, HEIGHT), alpha=False) or pygame.Surface((WIDTH, HEIGHT))
 
-def generate_beep_sound(frequency=440, duration=0.5):
-    """Generate a simple beep sound using pygame's mixer"""
-    sample_rate = 44100
-    n_samples = int(sample_rate * duration)
-    buf = numpy.zeros((n_samples, 2), dtype=numpy.int16)
+# Load heart images
+heart_full = load_image("heart_full.png", (HEART_SIZE, HEART_SIZE)) or pygame.Surface((HEART_SIZE, HEART_SIZE), pygame.SRCALPHA)
+heart_empty = load_image("heart_empty.png", (HEART_SIZE, HEART_SIZE)) or pygame.Surface((HEART_SIZE, HEART_SIZE), pygame.SRCALPHA)
+
+# Create heart shapes if images not found
+if not os.path.exists("heart_full.png"):
+    heart_full = pygame.Surface((HEART_SIZE, HEART_SIZE), pygame.SRCALPHA)
+    points = [
+        (HEART_SIZE//2, HEART_SIZE//6),
+        (HEART_SIZE//6, HEART_SIZE//2),
+        (HEART_SIZE//2, HEART_SIZE*5//6),
+        (HEART_SIZE*5//6, HEART_SIZE//2)
+    ]
+    pygame.draw.polygon(heart_full, (255, 0, 0), points)
+    pygame.draw.polygon(heart_full, (255, 0, 0), [
+        (HEART_SIZE//2, HEART_SIZE//6),
+        (HEART_SIZE*5//6, HEART_SIZE//2),
+        (HEART_SIZE//2, HEART_SIZE*5//6),
+        (HEART_SIZE//6, HEART_SIZE//2)
+    ])
+
+if not os.path.exists("heart_empty.png"):
+    heart_empty = pygame.Surface((HEART_SIZE, HEART_SIZE), pygame.SRCALPHA)
+    pygame.draw.polygon(heart_empty, (255, 0, 0), points)
+    pygame.draw.polygon(heart_empty, (255, 0, 0), [
+        (HEART_SIZE//2, HEART_SIZE//6),
+        (HEART_SIZE*5//6, HEART_SIZE//2),
+        (HEART_SIZE//2, HEART_SIZE*5//6),
+        (HEART_SIZE//6, HEART_SIZE//2)
+    ], 2)
+
+class EnemyAnimation:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.frame = None
+        self.direction = -1  # Faces left
+        self.width = 100
+        self.height = 150
+        self.hand_position = (30, 100)  # Position relative to character
+        self.load_frame()
     
-    for s in range(n_samples):
-        t = float(s) / sample_rate
-        buf[s][0] = int(32767 * numpy.sin(2 * numpy.pi * frequency * t))
-        buf[s][1] = int(32767 * numpy.sin(2 * numpy.pi * frequency * t))
+    def load_frame(self):
+        try:
+            self.frame = load_image("Enemy_1.png", (self.width, self.height))
+            # Create a mask to help with positioning
+            self.hand_position = (self.width * 0.2, self.height * 0.7)  # Position of sword hand
+        except:
+            print("Failed to load Enemy_1.png")
+            self.frame = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            pygame.draw.rect(self.frame, ENEMY_COLOR, (0, 0, self.width, self.height))
+            self.hand_position = (self.width * 0.2, self.height * 0.7)
     
-    return pygame.sndarray.make_sound(buf)
+    def update(self):
+        pass  # No animation updates needed
+    
+    def draw(self, surface):
+        if self.frame:
+            current_image = pygame.transform.flip(self.frame, True, False)
+            surface.blit(current_image, (self.x - self.width//2, self.y - self.height//2))
 
 class StoryNarration:
     def __init__(self):
@@ -137,6 +193,19 @@ class StoryNarration:
         if 0 <= self.current_segment < len(self.sounds) and self.sounds[self.current_segment]:
             self.sounds[self.current_segment].play()
     
+    def update(self):
+        if not self.active:
+            return False
+            
+        segment = self.story_segments[self.current_segment]
+        
+        if time.time() - self.start_time > segment["duration"]:
+            self.next_segment()
+        else:
+            self.update_image()
+        
+        return self.active
+    
     def update_image(self):
         segment = self.story_segments[self.current_segment]
         current_image_duration = segment["images"][self.current_image][1]
@@ -160,19 +229,6 @@ class StoryNarration:
         else:
             self.active = False
     
-    def update(self):
-        if not self.active:
-            return False
-            
-        segment = self.story_segments[self.current_segment]
-        
-        if time.time() - self.start_time > segment["duration"]:
-            self.next_segment()
-        else:
-            self.update_image()
-        
-        return self.active
-    
     def draw(self, surface):
         if not self.active:
             return
@@ -182,6 +238,352 @@ class StoryNarration:
         bg = self.images.get(img_file, pygame.Surface((WIDTH, HEIGHT)))
         
         surface.blit(bg, (0, 0))
+
+class DialogBox:
+    def __init__(self):
+        # Dialog box configuration
+        self.width = WIDTH - 100
+        self.height = 120
+        self.x = 50
+        self.y = HEIGHT - self.height - 40  # Extra space for speaker label
+        
+        # Speaker colors
+        self.player_bg = (65, 105, 225)   # Royal Blue
+        self.enemy_bg = (220, 20, 60)     # Crimson Red
+        self.neutral_bg = (40, 40, 60)    # Dark Slate
+        
+        # Text styling
+        self.border_color = (90, 90, 90)
+        self.text_color = (240, 240, 240)
+        self.speaker_color = (255, 255, 0)  # Yellow for speaker names
+        self.border_radius = 8
+        self.padding = 25
+        
+        # Text animation
+        self.current_text = ""
+        self.display_text = ""
+        self.char_index = 0
+        self.speed = 0.05  # Text speed (lower = faster)
+        self.timer = 0
+        
+        # State control
+        self.active = False
+        self.speaker = None
+
+    def show(self, text, speaker=None):
+        """Show text with optional speaker"""
+        self.current_text = text
+        self.display_text = ""
+        self.char_index = 0
+        self.timer = 0
+        self.active = True
+        self.speaker = speaker
+
+    def update(self, dt):
+        """Animate text display"""
+        if not self.active:
+            return
+            
+        self.timer += dt
+        if self.timer > self.speed and self.char_index < len(self.current_text):
+            self.display_text += self.current_text[self.char_index]
+            self.char_index += 1
+            self.timer = 0
+
+    def draw(self, surface):
+        """Render all dialog elements"""
+        if not self.active:
+            return
+            
+        # Determine background color
+        bg_color = {
+            "player": self.player_bg,
+            "enemy": self.enemy_bg
+        }.get(self.speaker, self.neutral_bg)
+        
+        # Draw speaker label if specified
+        if self.speaker in ("player", "enemy"):
+            speaker_label = f"{self.speaker.upper()}:"
+            speaker_surface = button_font.render(speaker_label, True, self.speaker_color)
+            surface.blit(speaker_surface, (self.x + 10, self.y - 30))
+        
+        # Draw dialog box
+        pygame.draw.rect(surface, bg_color,
+                        (self.x, self.y, self.width, self.height),
+                        border_radius=self.border_radius)
+        pygame.draw.rect(surface, self.border_color,
+                        (self.x, self.y, self.width, self.height),
+                        2, border_radius=self.border_radius)
+        
+        # Draw wrapped text
+        for i, line in enumerate(self._wrap_text(self.display_text)):
+            text_surface = pixel_font.render(line, True, self.text_color)
+            surface.blit(text_surface, (self.x + self.padding, self.y + self.padding + i * 28))
+
+    def _wrap_text(self, text):
+        """Wrap text to fit dialog box width"""
+        words = text.split(' ')
+        lines = []
+        current_line = []
+        
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            if pixel_font.size(test_line)[0] <= self.width - (self.padding * 2):
+                current_line.append(word)
+            else:
+                lines.append(' '.join(current_line))
+                current_line = [word]
+        lines.append(' '.join(current_line))
+        return lines
+
+    def is_complete(self):
+        """Check if all text has been displayed"""
+        return self.char_index >= len(self.current_text)
+
+    def complete(self):
+        """Show all text immediately"""
+        self.display_text = self.current_text
+        self.char_index = len(self.current_text)
+
+    def hide(self):
+        """Close the dialog box"""
+        self.active = False
+
+class PlayerAnimation:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.frames = []
+        self.current_frame = 0
+        self.animation_speed = 0.2
+        self.frame_counter = 0
+        self.direction = 1
+        self.speed = 5
+        self.width = 100
+        self.height = 150
+        self.load_frames()
+        
+    def load_frames(self):
+        for i in range(1, 7):
+            try:
+                frame = load_image(f"Player_ ({i}).png")
+                if frame:
+                    self.frames.append(frame)
+                    if i == 1:
+                        self.width = frame.get_width()
+                        self.height = frame.get_height()
+            except:
+                print(f"Failed to load Player_ ({i}).png")
+                surf = pygame.Surface((100, 150), pygame.SRCALPHA)
+                pygame.draw.rect(surf, (255, 0, 0), (0, 0, 100, 150))
+                self.frames.append(surf)
+        
+        while len(self.frames) < 6:
+            surf = pygame.Surface((100, 150), pygame.SRCALPHA)
+            pygame.draw.rect(surf, (255, 0, 0), (0, 0, 100, 150))
+            self.frames.append(surf)
+    
+    def update(self):
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_d]:
+            self.x += self.speed
+            self.direction = 1
+            self.frame_counter += self.animation_speed
+        elif keys[pygame.K_a]:
+            self.x -= self.speed
+            self.direction = -1
+            self.frame_counter += self.animation_speed
+        else:
+            self.frame_counter = 0
+            self.current_frame = 0
+        
+        self.x = max(self.width//2, min(WIDTH - self.width//2, self.x))
+        
+        if self.frame_counter >= 1:
+            self.current_frame = (self.current_frame + 1) % len(self.frames)
+            self.frame_counter = 0
+    
+    def draw(self, surface):
+        current_image = self.frames[self.current_frame]
+        if self.direction == -1:
+            current_image = pygame.transform.flip(current_image, True, False)
+        surface.blit(current_image, (self.x - self.width//2, self.y - self.height//2))
+
+class AnimatedBackground:
+    def __init__(self, base_name="Background_1", num_frames=70):
+        self.base_name = base_name
+        self.num_frames = num_frames
+        self.frames = []
+        self.current_frame = 0
+        self.animation_speed = 0.5
+        self.frame_counter = 0
+        self.load_frames()
+        
+    def load_frames(self):
+        for i in range(1, self.num_frames + 1):
+            try:
+                img = load_image(f"{self.base_name} ({i}).jpg", (WIDTH, HEIGHT), alpha=False)
+                self.frames.append(img)
+            except:
+                surf = pygame.Surface((WIDTH, HEIGHT))
+                color = (i % 255, (i * 2) % 255, (i * 3) % 255)
+                pygame.draw.rect(surf, color, (0, 0, WIDTH, HEIGHT))
+                self.frames.append(surf)
+    
+    def update(self):
+        self.frame_counter += self.animation_speed
+        if self.frame_counter >= 1:
+            self.current_frame = (self.current_frame + 1) % self.num_frames
+            self.frame_counter = 0
+    
+    def draw(self, surface):
+        surface.blit(self.frames[self.current_frame], (0, 0))
+
+class Fighter:
+    def __init__(self, x, y, size, color, is_player):
+        self.x = x
+        self.y = y
+        self.color = color
+        self.original_pos = (x, y)
+        self.health = MAX_HEALTH
+        self.is_attacking = False
+        self.attack_progress = 0
+        self.is_player = is_player
+        self.speed = 5 * (WIDTH / 800)
+        self.size = size
+        
+        # Load sword image
+        self.sword_img = load_image("Sword_Enemy.png", (60, 60)) or pygame.Surface((60, 60), pygame.SRCALPHA)
+        self.player_sword = self.sword_img
+        self.antagonist_sword = pygame.transform.flip(self.sword_img, True, False)
+        
+        if is_player:
+            # Player initialization
+            self.animation = PlayerAnimation(x, y)
+            self.animation.y = HEIGHT//2 - 40
+            self.width = self.animation.width
+            self.height = self.animation.height
+            # Sword offsets (right side)
+            self.idle_sword_pos = (25, -25)  # (x, y) offset from center
+            self.attack_sword_pos = (60, -15)
+        else:
+            # Enemy initialization
+            self.y = HEIGHT//2 + 60
+            self.enemy_img = load_image("Enemy_1.png", (100, 150)) or pygame.Surface((100, 150), pygame.SRCALPHA)
+            if not os.path.exists("Enemy_1.png"):
+                pygame.draw.rect(self.enemy_img, ENEMY_COLOR, (0, 0, 100, 150))
+            self.enemy_img = pygame.transform.flip(self.enemy_img, True, False)  # Flip to face left
+            self.width = 100
+            self.height = 150
+            # Sword offsets (left side)
+            self.idle_sword_pos = (-25, -25)
+            self.attack_sword_pos = (-60, -15)
+
+    def draw(self, surface):
+        # Draw character
+        if self.is_player:
+            if hasattr(self, 'animation'):
+                self.animation.draw(surface)
+        else:
+            # Draw flipped enemy image
+            enemy_rect = self.enemy_img.get_rect(center=(self.x, self.y))
+            surface.blit(self.enemy_img, enemy_rect)
+        
+        # Draw sword
+        current_sword = self.player_sword if self.is_player else self.antagonist_sword
+        attack_progress = math.sin(self.attack_progress * math.pi) if self.is_attacking else 0
+        
+        # Calculate sword position and rotation
+        if self.is_attacking:
+            # Attack animation
+            sword_rot = -45 - 20 * attack_progress if self.is_player else 45 + 20 * attack_progress
+            sword = pygame.transform.rotate(current_sword, sword_rot)
+            
+            # Move sword forward during attack
+            base_x, base_y = self.attack_sword_pos
+            pos = (
+                self.x + base_x * (1 + attack_progress * 0.5),
+                self.y + base_y - 15 * attack_progress
+            )
+        else:
+            # Idle position
+            sword = current_sword
+            base_x, base_y = self.idle_sword_pos
+            pos = (self.x + base_x, self.y + base_y)
+        
+        # Draw sword
+        sword_rect = sword.get_rect(center=pos)
+        surface.blit(sword, sword_rect)
+
+    def attack(self, target):
+        """Initiate an attack on the target"""
+        if not self.is_attacking:
+            self.is_attacking = True
+            self.attack_progress = 0
+
+    def take_damage(self, amount):
+        """Apply damage and return True if health reaches zero"""
+        self.health = max(0, self.health - amount)
+        # Play hit sound if available
+        try:
+            pygame.mixer.Sound("hit.wav").play()
+        except:
+            pass
+        return self.health <= 0
+
+    def update(self, target):
+        """Update character state and return True if attack completes"""
+        # Update animation if exists
+        if hasattr(self, 'animation'):
+            self.animation.x = self.x
+            self.animation.y = self.y
+            self.animation.update()
+        
+        # Handle attack movement
+        if self.is_attacking:
+            self.attack_progress = min(1.0, self.attack_progress + 0.08)
+            
+            # Smooth movement curve
+            move_progress = math.sin(self.attack_progress * math.pi/2)
+            
+            # Move toward target
+            self.x = self.original_pos[0] + (target.x - self.original_pos[0]) * move_progress
+            self.y = self.original_pos[1] + (target.y - self.original_pos[1]) * move_progress
+            
+            # Return to original position when attack completes
+            if self.attack_progress >= 1:
+                self.is_attacking = False
+                self.x, self.y = self.original_pos
+                return True
+        return False
+
+class AnswerButton:
+    def __init__(self, x, y, width, height, answer, index):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.answer = answer
+        self.color = (70, 70, 70)
+        self.hover_color = (100, 100, 100)
+        self.text_color = WHITE
+        
+    def draw(self, surface):
+        color = self.hover_color if self.is_hovered() else self.color
+        pygame.draw.rect(surface, color, self.rect, border_radius=6)
+        pygame.draw.rect(surface, (50, 50, 50), self.rect, 2, border_radius=6)
+        
+        if isinstance(self.answer, Fraction):
+            answer_text = f"{self.answer.numerator}/{self.answer.denominator}"
+        else:
+            answer_text = str(round(self.answer, 2)) if isinstance(self.answer, float) else str(self.answer)
+        
+        text = button_font.render(answer_text, True, self.text_color)
+        text_rect = text.get_rect(center=self.rect.center)
+        surface.blit(text, text_rect)
+        
+    def is_hovered(self):
+        return self.rect.collidepoint(pygame.mouse.get_pos())
+    
+    def is_clicked(self, event):
+        return event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.rect.collidepoint(event.pos)
 
 class StartButton:
     def __init__(self):
@@ -227,7 +629,93 @@ class TutorialButton:
     def is_clicked(self, event):
         return event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.rect.collidepoint(event.pos)
 
+def show_pre_battle_dialog():
+    # Load the background image
+    fight_bg = load_image("sword_fight_bg.jpg", (WIDTH, HEIGHT), alpha=False) or pygame.Surface((WIDTH, HEIGHT))
+    
+    # Load character images (assuming these PNGs exist)
+    player_img = load_image("Player_ (1).png", (150, 200)) or pygame.Surface((150, 200), pygame.SRCALPHA)
+    enemy_img = load_image("Enemy_1.png", (150, 200)) or pygame.Surface((150, 200), pygame.SRCALPHA)
+    
+    # Flip enemy to face left
+    enemy_img = pygame.transform.flip(enemy_img, True, False)
+    
+    dialog = DialogBox()
+    dialog_lines = [
+        ("Well, well, well, look who we have here?", "enemy",),
+        ("Where did you hide my son!? GIVE IT BACK!", "player"),
+        ("Hah, since your husband kill our master's son\nwe can't give it back this easily", "enemy"),
+        ("Then what do you want so you can get out of my way", "player"),
+        ("Simple,all you do just answer my math questions correctly", "enemy"),
+        ("Tsk, thats easy I can solve it really quickly", "player"),
+        ("Alright then, if you say so", "enemy")
+    ]
+
+    current_line = 0
+    dialog.show(dialog_lines[current_line][0], dialog_lines[current_line][1])
+    
+    # Create instruction text
+    instruction_font = pygame.font.SysFont('Arial', 20)
+    instruction_text = instruction_font.render("Press ENTER to continue", True, (180, 180, 180))
+    
+    clock = pygame.time.Clock()
+    waiting = True
+    
+    while waiting:
+        dt = clock.tick(60) / 1000.0
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    if dialog.is_complete():
+                        current_line += 1
+                        if current_line < len(dialog_lines):
+                            dialog.show(dialog_lines[current_line][0], dialog_lines[current_line][1])
+                        else:
+                            waiting = False
+                    else:
+                        dialog.complete()
+        
+        # Draw background
+        screen.blit(fight_bg, (0, 0))
+        
+        # Draw characters
+        screen.blit(player_img, (WIDTH//4 - 75, HEIGHT//2 - 100))
+        screen.blit(enemy_img, (3*WIDTH//4 - 75, HEIGHT//2 - 100))
+        
+        dialog.update(dt)
+        dialog.draw(screen)
+        
+        # Show instruction text inside dialog box when dialog is complete
+        if dialog.is_complete():
+            screen.blit(instruction_text, 
+                       (dialog.x + dialog.width - instruction_text.get_width() - 20,
+                        dialog.y + dialog.height - instruction_text.get_height() - 10))
+        
+        pygame.display.flip()
+    
+    return True
+
+def generate_sound(frequency=440, duration=0.5, volume=0.5):
+    """Generate a simple sine wave sound using pygame"""
+    sample_rate = 22050
+    samples = int(sample_rate * duration)
+    buffer = pygame.sndarray.make_sound(bytearray(samples * 2))
+    
+    # Manually generate sine wave
+    for i in range(samples):
+        t = float(i) / sample_rate
+        wave = int(32767 * volume * math.sin(2 * math.pi * frequency * t))
+        # Write to both channels (stereo)
+        buffer.set_at(i, (wave, wave))
+    
+    return buffer
+
 def show_tutorial_screen():
+    pygame.mixer.stop()
     tutorial_pages = [
         [
             "HOW TO PLAY",
@@ -251,8 +739,11 @@ def show_tutorial_screen():
             "left:Decimal Conversion:|right:Fraction of Quantity:",
             "left:   Example: 1/4 = 0.25|right:   Example: 1/3 of 30 = 10",
             "",
-            "left:Percentages:",
-            "left:   Example: 20% of 50 = 10",
+            "left:Percentages:|right:Measurement:",
+            "left:   Example: 20% of 50 = 10|right:   Example: Area of 5cm × 4cm = 20cm²",
+            "",
+            "left:Geometry:|right:Statistics:",
+            "left:   Example: △ angles sum to 180°|right:   Example: Range of 10,15,20 is 10",
             "",
             "Page 2/3"
         ],
@@ -342,6 +833,7 @@ def show_tutorial_screen():
         clock.tick(60)
 
 def fade_in_out_warning():
+    pygame.mixer.stop()
     clock = pygame.time.Clock()
     fade_surface = pygame.Surface((WIDTH, HEIGHT))
     fade_surface.fill(BLACK)
@@ -419,161 +911,208 @@ def fade_in_out_warning():
         clock.tick(60)
 
 def generate_math_question():
-    question_type = random.choice([
-        'fraction_addition', 
-        'decimal_conversion', 
-        'percentage', 
-        'basic_algebra',
-        'fraction_of_quantity'
-    ])
+    """Generates math questions with answers"""
+    categories = ['fraction', 'decimal', 'percentage', 'algebra', 'measurement', 'geometry', 'statistics']
+    category = random.choice(categories)
     
-    if question_type == 'fraction_addition':
-        a = Fraction(random.randint(1, 3), random.randint(2, 4))
-        b = Fraction(random.randint(1, 3), random.randint(2, 4))
-        question = f"{a} + {b} = ?"
-        answer = a + b
-    elif question_type == 'decimal_conversion':
-        frac = Fraction(random.randint(1, 4), random.randint(2, 5))
-        question = f"Convert {frac} to a decimal"
-        answer = float(frac)
-    elif question_type == 'percentage':
-        num = random.randint(1, 20) * 5
-        quantity = random.randint(10, 100)
-        question = f"{num}% of {quantity} = ?"
-        answer = round(num / 100 * quantity, 2)
-    elif question_type == 'basic_algebra':
-        x = random.randint(2, 5)
+    if category == 'fraction':
+        a = Fraction(random.randint(1,5), random.randint(2,8))
+        b = Fraction(random.randint(1,5), random.randint(2,8))
+        op = random.choice(['+', '-', '×', '÷'])
+        question = f"{a} {op} {b} = ?"
+        if op == '+': answer = a + b
+        elif op == '-': answer = a - b
+        elif op == '×': answer = a * b
+        else: answer = a / b
+    
+    elif category == 'decimal':
+        a = round(random.uniform(1, 10), 2)
+        b = round(random.uniform(1, 5), 2)
+        op = random.choice(['+', '-', '×', '÷'])
+        question = f"{a} {op} {b} = ?"
+        if op == '+': answer = round(a + b, 2)
+        elif op == '-': answer = round(a - b, 2)
+        elif op == '×': answer = round(a * b, 2)
+        else: answer = round(a / b, 2)
+    
+    elif category == 'percentage':
+        percent = random.randint(5, 30) * 5
+        amount = random.randint(10, 200)
+        question = f"{percent}% of {amount} = ?"
+        answer = round(amount * percent / 100, 2)
+    
+    elif category == 'algebra':
+        x = random.randint(2, 6)
         coeff = random.randint(2, 5)
         const = random.randint(1, 10)
         question = f"If {coeff}x + {const} = {coeff*x + const}, x = ?"
         answer = x
-    elif question_type == 'fraction_of_quantity':
-        frac = Fraction(random.randint(1, 3), random.randint(2, 4))
-        quantity = random.randint(10, 50)
-        question = f"Find {frac} of {quantity}"
-        answer = frac * quantity
+    
+    elif category == 'measurement':
+        l = random.randint(5, 15)
+        w = random.randint(3, 10)
+        question = f"Area of {l}cm × {w}cm rectangle (cm²)?"
+        answer = l * w
+    
+    elif category == 'geometry':
+        shapes = ["triangle", "square", "pentagon"]
+        shape = random.choice(shapes)
+        question = f"Angles in {shape} sum to ?°"
+        answer = 180 if "triangle" in shape else 360 if "square" in shape else 540
+    
+    elif category == 'statistics':
+        nums = sorted([random.randint(10, 50) for _ in range(4)])
+        question = f"Range of {', '.join(map(str, nums))} = ?"
+        answer = nums[-1] - nums[0]
     
     answers = [answer]
     while len(answers) < 3:
         if isinstance(answer, (int, float)):
-            wrong = answer * random.choice([0.5, 1.5, 2])
+            wrong = answer * random.choice([0.5, 1.5, 0.8, 1.2])
             wrong = round(wrong, 2) if isinstance(answer, float) else wrong
         elif isinstance(answer, Fraction):
-            wrong = answer + Fraction(1, random.randint(2, 5))
+            wrong = answer + Fraction(random.randint(1,3), random.randint(2,5))
         if wrong not in answers:
             answers.append(wrong)
     
     random.shuffle(answers)
     return question, answer, answers
 
-class Fighter:
-    def __init__(self, x, y, size, color, is_player):
-        self.x = x
-        self.y = y
-        self.size = size
-        self.color = color
-        self.original_pos = (x, y)
-        self.health = 100
-        self.is_attacking = False
-        self.attack_progress = 0
-        self.is_player = is_player
-        self.speed = 5 * (WIDTH / 800)
-        
-    def draw(self, surface):
-        pygame.draw.rect(surface, self.color, 
-                       (self.x - self.size//2, 
-                        self.y - self.size//2, 
-                        self.size, self.size))
-        
-        if sword_img:
-            if self.is_attacking:
-                if self.is_player:
-                    sword = pygame.transform.rotate(player_sword, -45) 
-                    pos = (self.x + self.size//2 + 20, self.y)
-                else:
-                    sword = pygame.transform.rotate(antagonist_sword, 45) 
-                    pos = (self.x - self.size//2 - 20, self.y)
-            else:
-                sword = player_sword if self.is_player else antagonist_sword
-                pos = (self.x + self.size//2 + 5, self.y) if self.is_player else (self.x - self.size//2 - 5, self.y)
-            
-            sword_rect = sword.get_rect(center=pos)
-            surface.blit(sword, sword_rect)
+def generate_question():
+    """Generates NZ Year 7 appropriate math questions"""
+    categories = [
+        'fraction', 'decimal', 'percentage', 
+        'algebra', 'measurement', 'geometry', 
+        'statistics', 'maori'
+    ]
+    category = random.choice(categories)
     
-    def attack(self, target):
-        if not self.is_attacking:
-            self.is_attacking = True
-            self.attack_progress = 0
-            
-    def update(self, target):
-        if self.is_attacking:
-            self.attack_progress += 0.08
-            self.x = self.original_pos[0] + (target.x - self.original_pos[0]) * self.attack_progress
-            self.y = self.original_pos[1] + (target.y - self.original_pos[1]) * self.attack_progress
-            
-            if self.attack_progress >= 1:
-                self.is_attacking = False
-                self.x, self.y = self.original_pos
-                return True
-        return False
-
-class AnswerButton:
-    def __init__(self, x, y, width, height, answer, index):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.answer = answer
-        self.color = (70, 70, 70)
-        self.hover_color = (100, 100, 100)
-        self.text_color = WHITE
-        
-    def draw(self, surface):
-        color = self.hover_color if self.is_hovered() else self.color
-        pygame.draw.rect(surface, color, self.rect, border_radius=6)
-        pygame.draw.rect(surface, (50, 50, 50), self.rect, 2, border_radius=6)
-        
-        if isinstance(self.answer, Fraction):
-            answer_text = f"{self.answer.numerator}/{self.answer.denominator}"
+    # Fraction problems
+    if category == 'fraction':
+        a = Fraction(random.randint(1,5), random.randint(2,8))
+        b = Fraction(random.randint(1,5), random.randint(2,8))
+        op = random.choice(['+', '-', '×', '÷'])
+        question = f"{a} {op} {b} = ?"
+        if op == '+': answer = a + b
+        elif op == '-': answer = a - b
+        elif op == '×': answer = a * b
+        else: answer = a / b
+    
+    # Decimal problems
+    elif category == 'decimal':
+        a = round(random.uniform(1, 10), 2)
+        b = round(random.uniform(1, 5), 2)
+        op = random.choice(['+', '-', '×', '÷'])
+        question = f"{a} {op} {b} = ?"
+        if op == '+': answer = round(a + b, 2)
+        elif op == '-': answer = round(a - b, 2)
+        elif op == '×': answer = round(a * b, 2)
+        else: answer = round(a / b, 2)
+    
+    # Percentage problems
+    elif category == 'percentage':
+        percent = random.randint(5, 30) * 5
+        amount = random.randint(10, 200)
+        if random.choice([True, False]):
+            question = f"{percent}% of {amount} = ?"
+            answer = round(amount * percent / 100, 2)
         else:
-            answer_text = str(round(self.answer, 2)) if isinstance(self.answer, float) else str(self.answer)
-        
-        text = button_font.render(answer_text, True, self.text_color)
-        text_rect = text.get_rect(center=self.rect.center)
-        surface.blit(text, text_rect)
-        
-    def is_hovered(self):
-        return self.rect.collidepoint(pygame.mouse.get_pos())
+            question = f"{amount} increased by {percent}% = ?"
+            answer = round(amount * (1 + percent/100), 2)
     
-    def is_clicked(self, event):
-        return event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.rect.collidepoint(event.pos)
+    # Algebra problems
+    elif category == 'algebra':
+        x = random.randint(2, 6)
+        coeff = random.randint(2, 5)
+        const = random.randint(1, 10)
+        question = f"If {coeff}x + {const} = {coeff*x + const}, x = ?"
+        answer = x
+    
+    # Measurement problems
+    elif category == 'measurement':
+        l = random.randint(5, 15)
+        w = random.randint(3, 10)
+        if random.choice([True, False]):
+            question = f"Area of {l}cm × {w}cm rectangle (cm²)?"
+            answer = l * w
+        else:
+            question = f"Perimeter of {l}cm × {w}cm rectangle (cm)?"
+            answer = 2 * (l + w)
+    
+    # Geometry problems (simplified)
+    elif category == 'geometry':
+        shapes = ["triangle", "square", "pentagon"]  # Simple shape names
+        shape = random.choice(shapes)
+        question = f"Angles in {shape} sum to ?°"
+        answer = 180 if "triangle" in shape else 360 if "square" in shape else 540
+    
+    # Statistics problems
+    elif category == 'statistics':
+        nums = sorted([random.randint(10, 50) for _ in range(4)])
+        question = f"Range of {', '.join(map(str, nums))} = ?"
+        answer = nums[-1] - nums[0]
+    
+    # Māori number problems (optional)
+    else:  # maori
+        maori_nums = {'tahi':1, 'rua':2, 'toru':3, 'whā':4, 'rima':5}
+        n1, n2 = random.sample(list(maori_nums.items()), 2)
+        op = random.choice(['+', '×'])
+        question = f"{n1[0]} {op} {n2[0]} = ?" 
+        answer = n1[1] + n2[1] if op == '+' else n1[1] * n2[1]
+    
+    # Generate wrong answers
+    answers = [answer]
+    while len(answers) < 3:
+        if isinstance(answer, (int, float)):
+            wrong = answer * random.choice([0.5, 1.5, 0.8, 1.2])
+            wrong = round(wrong, 2) if isinstance(answer, float) else wrong
+        elif isinstance(answer, Fraction):
+            wrong = answer + Fraction(random.randint(1,3), random.randint(2,5))
+        if wrong not in answers:
+            answers.append(wrong)
+    
+    random.shuffle(answers)
+    return question, answer, answers
 
 def show_game_over_screen(player_won):
+    pygame.mixer.stop()
     waiting = True
     clock = pygame.time.Clock()
     
-    # Generate simple victory/defeat sounds
+    # Create clearer fonts
+    victory_font = pygame.font.SysFont('Arial', 72, bold=True)
+    instruction_font = pygame.font.SysFont('Arial', 36, bold=True)
+    
     try:
         if player_won:
-            # High-pitched victory sound (G5 to C6)
-            victory_sound1 = generate_beep_sound(784, 0.3)
-            victory_sound1.play()
-            pygame.time.delay(100)
-            victory_sound2 = generate_beep_sound(1046, 0.3)
-            victory_sound2.play()
+            if os.path.exists("victory.mp3"):
+                pygame.mixer.Sound("victory.mp3").play()
+            else:
+                sound1 = generate_sound(784, 0.2)  # G5
+                sound2 = generate_sound(1046, 0.3)  # C6
+                sound1.play()
+                pygame.time.delay(200)
+                sound2.play()
         else:
-            # Low-pitched defeat sound (A3 to G3)
-            defeat_sound1 = generate_beep_sound(220, 0.5)
-            defeat_sound1.play()
-            pygame.time.delay(300)
-            defeat_sound2 = generate_beep_sound(196, 0.5)
-            defeat_sound2.play()
+            if os.path.exists("defeat.mp3"):
+                pygame.mixer.Sound("defeat.mp3").play()
+            else:
+                sound1 = generate_sound(220, 0.3)  # A3
+                sound2 = generate_sound(196, 0.4)  # G3
+                sound1.play()
+                pygame.time.delay(300)
+                sound2.play()
     except:
-        print("Could not generate game over sound")
+        pass
     
     while waiting:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                waiting = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
                 waiting = False
         
         if player_won:
@@ -581,27 +1120,203 @@ def show_game_over_screen(player_won):
                 screen.blit(victory_img, (0, 0))
             else:
                 screen.fill(BACKGROUND)
-                result_text = result_font.render("VICTORY!", True, (0, 0, 0))
-                screen.blit(result_text, (WIDTH//2 - result_text.get_width()//2, HEIGHT//2 - 50))
+                # Main victory text with outline
+                victory_text = victory_font.render("VICTORY!", True, (0, 255, 0))
+                text_rect = victory_text.get_rect(center=(WIDTH//2, HEIGHT//2 - 50))
+                
+                # Draw text outline
+                outline_color = (0, 100, 0)
+                for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
+                    outline_rect = text_rect.move(offset[0], offset[1])
+                    outline_text = victory_font.render("VICTORY!", True, outline_color)
+                    screen.blit(outline_text, outline_rect)
+                
+                # Draw main text
+                screen.blit(victory_text, text_rect)
+                
+                # Instruction text
+                continue_text = instruction_font.render("Press ENTER to Continue", True, (200, 200, 200))
+                continue_rect = continue_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
+                screen.blit(continue_text, continue_rect)
         else:
             if game_over_img:
                 screen.blit(game_over_img, (0, 0))
             else:
                 screen.fill(BACKGROUND)
-                result_text = result_font.render("DEFEAT", True, (200, 150, 0))
-                screen.blit(result_text, (WIDTH//2 - result_text.get_width()//2, HEIGHT//2 - 50))
-        
-        if player_won:
-            message = subtitle_font.render("You defeated the enemy!", True, (0, 0, 0))
-        else:
-            message = subtitle_font.render("You were defeated in battle...", True, (200, 150, 0))
-        
-        screen.blit(message, (WIDTH//2 - message.get_width()//2, HEIGHT - 150))
-        continue_text = button_font.render("Press any key to continue", True, TITLE_COLOR)
-        screen.blit(continue_text, (WIDTH//2 - continue_text.get_width()//2, HEIGHT - 100))
+                # Main defeat text with outline
+                defeat_text = victory_font.render("DEFEAT", True, (255, 0, 0))
+                text_rect = defeat_text.get_rect(center=(WIDTH//2, HEIGHT//2 - 50))
+                
+                # Draw text outline
+                outline_color = (100, 0, 0)
+                for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
+                    outline_rect = text_rect.move(offset[0], offset[1])
+                    outline_text = victory_font.render("DEFEAT", True, outline_color)
+                    screen.blit(outline_text, outline_rect)
+                
+                # Draw main text
+                screen.blit(defeat_text, text_rect)
+                
+                # Instruction text
+                continue_text = instruction_font.render("Press ENTER to Continue", True, (200, 200, 200))
+                continue_rect = continue_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
+                screen.blit(continue_text, continue_rect)
         
         pygame.display.flip()
         clock.tick(60)
+
+def show_victory_dialog():
+    dialog = DialogBox()
+    dialog_lines = [
+        ("You defeated me... I'll tell you where your son is.", "enemy"),
+        ("He's in the castle dungeon. But you'll never make it past the guards!", "enemy"),
+        ("I'll take my chances. Thank you for the information.", "player")
+    ]
+
+    current_line = 0
+    dialog.show(dialog_lines[current_line][0], dialog_lines[current_line][1])
+    
+    clock = pygame.time.Clock()
+    waiting = True
+    
+    while waiting:
+        dt = clock.tick(60) / 1000.0
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    if dialog.is_complete():
+                        current_line += 1
+                        if current_line < len(dialog_lines):
+                            dialog.show(dialog_lines[current_line][0], dialog_lines[current_line][1])
+                        else:
+                            waiting = False
+                    else:
+                        dialog.complete()
+        
+        screen.fill(BACKGROUND)
+        dialog.update(dt)
+        dialog.draw(screen)
+        pygame.display.flip()
+    
+    # After dialog, show the new backdrop with player
+    return show_castle_backdrop()
+
+def show_castle_backdrop():
+    # Load castle background
+    castle_bg = load_image("castle_backdrop.jpg", (WIDTH, HEIGHT), alpha=False) or pygame.Surface((WIDTH, HEIGHT))
+    
+    # Initialize player
+    player = PlayerAnimation(WIDTH//2, HEIGHT - 150)
+    
+    # Create instruction text
+    instruction_font = pygame.font.SysFont('Arial', 24)
+    instruction_text = instruction_font.render("Move with A and D keys", True, WHITE)
+    
+    clock = pygame.time.Clock()
+    running = True
+    
+    while running:
+        dt = clock.tick(60) / 1000.0
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+        
+        # Update player movement
+        player.update()
+        
+        # Draw everything
+        screen.blit(castle_bg, (0, 0))
+        player.draw(screen)
+        
+        # Show instruction
+        screen.blit(instruction_text, (WIDTH//2 - instruction_text.get_width()//2, 40))
+        
+        pygame.display.flip()
+    
+    return True
+
+def show_defeat_dialog():
+    dialog = DialogBox()
+    dialog_lines = [
+        ("Hahaha! You're too weak to save your son!", "enemy"),
+        ("...I'll be back. This isn't over.", "player"),
+        ("Come back anytime you want to lose again!", "enemy"),
+        ("Would you like to try again?", "player")
+    ]
+
+    current_line = 0
+    dialog.show(dialog_lines[current_line][0], dialog_lines[current_line][1])
+    
+    # Create yes/no buttons
+    yes_button = AnswerButton(WIDTH//2 - 150, HEIGHT - 100, 120, 50, "Yes", 0)
+    no_button = AnswerButton(WIDTH//2 + 30, HEIGHT - 100, 120, 50, "No", 1)
+    
+    waiting = True
+    retry = False
+    clock = pygame.time.Clock()
+    
+    while waiting:
+        dt = clock.tick(60) / 1000.0
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    if dialog.is_complete():
+                        current_line += 1
+                        if current_line < len(dialog_lines):
+                            dialog.show(dialog_lines[current_line][0], dialog_lines[current_line][1])
+                        else:
+                            pass  # Wait for button click
+                    else:
+                        dialog.complete()
+            
+            if current_line >= len(dialog_lines) - 1:  # Only show buttons on last line
+                if yes_button.is_clicked(event):
+                    waiting = False
+                    retry = True
+                if no_button.is_clicked(event):
+                    waiting = False
+                    retry = False
+        
+        screen.fill(BACKGROUND)
+        dialog.update(dt)
+        dialog.draw(screen)
+        
+        if current_line >= len(dialog_lines) - 1 and dialog.is_complete():
+            yes_button.draw(screen)
+            no_button.draw(screen)
+        
+        pygame.display.flip()
+    
+    if not retry:
+        # Show mocking dialog if player doesn't want to retry
+        dialog.show("Too scared to try again? Your son will be disappointed!", "enemy")
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                    waiting = False
+            
+            screen.fill(BACKGROUND)
+            dialog.draw(screen)
+            pygame.display.flip()
+    
+    return retry
 
 def show_title_screen():
     global story
@@ -619,6 +1334,7 @@ def show_title_screen():
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.KEYDOWN:
+                pygame.mixer.stop()
                 if event.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()
@@ -629,10 +1345,12 @@ def show_title_screen():
                 else:
                     story.active = False
             if start_button.is_clicked(event):
+                pygame.mixer.stop()
                 story.active = False
                 fade_in_out_warning()
                 waiting = False
             if tutorial_button.is_clicked(event):
+                pygame.mixer.stop()
                 story.active = False
                 show_tutorial_screen()
         
@@ -659,21 +1377,101 @@ def show_title_screen():
         
         pygame.display.flip()
 
-def main_game():
-    player = Fighter(WIDTH//4, HEIGHT//2, 60, PLAYER_COLOR, True)
-    antagonist = Fighter(3*WIDTH//4, HEIGHT//2, 60, ENEMY_COLOR, False)
+def show_character_scene():
+    character = PlayerAnimation(WIDTH//2, HEIGHT - 150)
+    background = AnimatedBackground()
+    dialog = DialogBox()
+    
+    # Create instruction text
+    instruction_font = pygame.font.SysFont('Arial', 28, bold=True)
+    instruction_text = instruction_font.render("Press D to move right", True, (255, 255, 0))  # Yellow text
+    instruction_shadow = instruction_font.render("Press D to move right", True, (0, 0, 0))    # Black shadow
+    
+    # Show instruction immediately
+    show_instructions = True
+    
+    # Show initial dialog after a short delay
+    dialog_timer = 1.0  # Show dialog after 1 second
+    show_dialog = False
+    
+    running = True
+    clock = pygame.time.Clock()
+    
+    while running:
+        dt = clock.tick(60) / 1000.0
+        
+        # Timer for showing dialog
+        if not show_dialog:
+            dialog_timer -= dt
+            if dialog_timer <= 0:
+                dialog.show("Let's go save my son!", "player")
+                show_dialog = True
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return False
+                if event.key == pygame.K_RETURN and show_dialog:
+                    if dialog.active:
+                        if dialog.is_complete():
+                            dialog.hide()
+                        else:
+                            dialog.complete()
+        
+        # Update animations
+        character.update()
+        background.update()
+        if show_dialog:
+            dialog.update(dt)
+        
+        # Check if player has reached the right edge of the screen
+        if character.x + character.width//2 >= WIDTH:
+            return True
+        
+        # Draw everything
+        background.draw(screen)
+        character.draw(screen)
+        
+        # Always draw instruction text (with shadow)
+        if show_instructions:
+            # Draw shadow (offset by 2 pixels)
+            screen.blit(instruction_shadow, (WIDTH//2 - instruction_shadow.get_width()//2 + 2, 20 + 2))
+            # Draw main text
+            screen.blit(instruction_text, (WIDTH//2 - instruction_text.get_width()//2, 20))
+        
+        # Draw dialog if active
+        if show_dialog and dialog.active:
+            dialog.draw(screen)
+        
+        pygame.display.flip()
+    
+    return False
 
+def main_game():
+    # Initialize characters
+    player_y = HEIGHT//2 + 75
+    enemy_y = HEIGHT//2 + 75
+    
+    player = Fighter(WIDTH//4, player_y, 60, PLAYER_COLOR, True)
+    antagonist = Fighter(3*WIDTH//4, enemy_y, 60, ENEMY_COLOR, False)
+    
+    # Show pre-battle dialog
+    if not show_pre_battle_dialog():
+        return False
+    
+    # Initialize game elements
+    dialog = DialogBox()
     current_question, correct_answer, answers = generate_math_question()
 
     button_width = 180
     button_height = 60
     button_margin = 20
-    total_buttons_width = 3 * button_width + 2 * button_margin
-    start_x = (WIDTH - total_buttons_width) // 2
-
     buttons = [
         AnswerButton(
-            start_x + i * (button_width + button_margin),
+            (WIDTH - (3 * button_width + 2 * button_margin)) // 2 + i * (button_width + button_margin),
             HEIGHT - 130,
             button_width,
             button_height,
@@ -682,9 +1480,14 @@ def main_game():
         ) for i in range(3)
     ]
 
+    # Show battle start dialog
+    dialog.show("Answer the question to defeat the enemy")
+    
     running = True
     clock = pygame.time.Clock()
     while running:
+        dt = clock.tick(60) / 1000.0
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -692,63 +1495,79 @@ def main_game():
                 sys.exit()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    running = False
                     return False
+                if event.key == pygame.K_RETURN:
+                    if dialog.active:
+                        if dialog.is_complete():
+                            dialog.hide()
+                        else:
+                            dialog.complete()
             
-            if not player.is_attacking and not antagonist.is_attacking:
+            if not dialog.active and not player.is_attacking and not antagonist.is_attacking:
                 for button in buttons:
                     if button.is_clicked(event):
                         if button.answer == correct_answer:
                             player.attack(antagonist)
+                            dialog.show("Great job! You attacked!", "player")
                         else:
                             antagonist.attack(player)
+                            dialog.show("Wrong! The enemy attacks you!", "enemy")
                         current_question, correct_answer, answers = generate_math_question()
                         for i, btn in enumerate(buttons):
                             btn.answer = answers[i]
         
         player_attack_hit = player.update(antagonist)
         antagonist_attack_hit = antagonist.update(player)
+        dialog.update(dt)
         
         if player_attack_hit:
-            antagonist.health = max(0, antagonist.health - 10)
+            if antagonist.take_damage(10):
+                dialog.show("You defeated the enemy!", "player")
+                show_game_over_screen(True)
+                show_victory_dialog()
+                running = False
         if antagonist_attack_hit:
-            player.health = max(0, player.health - 10)
+            if player.take_damage(10):
+                dialog.show("You were defeated...", "enemy")
+                show_game_over_screen(False)
+                retry = show_defeat_dialog()
+                if retry:
+                    # Reset game for retry
+                    player.health = MAX_HEALTH
+                    antagonist.health = MAX_HEALTH
+                    current_question, correct_answer, answers = generate_math_question()
+                    for i, btn in enumerate(buttons):
+                        btn.answer = answers[i]
+                    dialog.show("Let's try this again!", "player")
+                else:
+                    running = False
         
-        screen.fill(BACKGROUND)
+        # Draw the Level_1 background instead of solid color
+        screen.blit(level1_bg, (0, 0))
         
-        pygame.draw.rect(screen, (50, 50, 50), (50, 40, 250, 20), 2)
-        pygame.draw.rect(screen, PLAYER_COLOR, (52, 42, 2.5*player.health, 16))
-        pygame.draw.rect(screen, (50, 50, 50), (WIDTH-300, 40, 250, 20), 2)
-        pygame.draw.rect(screen, ENEMY_COLOR, (WIDTH-298, 42, 2.5*antagonist.health, 16))
+        # Draw hearts
+        full_hearts_player = player.health // HEALTH_PER_HEART
+        for i in range(HEARTS):
+            heart = heart_full if i < full_hearts_player else heart_empty
+            screen.blit(heart, (50 + i * (HEART_SIZE + HEART_SPACING), 40))
         
-        health_text = health_font.render(f"Health: {player.health}", True, WHITE)
-        screen.blit(health_text, (50, 70))
-        health_text = health_font.render(f"Health: {antagonist.health}", True, WHITE)
-        screen.blit(health_text, (WIDTH-250, 70))
+        full_hearts_enemy = antagonist.health // HEALTH_PER_HEART
+        for i in range(HEARTS):
+            heart = heart_full if i < full_hearts_enemy else heart_empty
+            screen.blit(heart, (WIDTH - 50 - (HEARTS - i) * (HEART_SIZE + HEART_SPACING), 40))
         
         question_text = question_font.render(current_question, True, WHITE)
         screen.blit(question_text, (WIDTH//2 - question_text.get_width()//2, 60))
         
-        if not player.is_attacking and not antagonist.is_attacking:
+        if not dialog.active and not player.is_attacking and not antagonist.is_attacking:
             for button in buttons:
                 button.draw(screen)
         
         player.draw(screen)
         antagonist.draw(screen)
-        
-        if player.is_attacking and player.attack_progress > 0.9:
-            damage_text = health_font.render("-10", True, PLAYER_COLOR)
-            screen.blit(damage_text, (antagonist.x-20, antagonist.y-60))
-        if antagonist.is_attacking and antagonist.attack_progress > 0.9:
-            damage_text = health_font.render("-10", True, ENEMY_COLOR)
-            screen.blit(damage_text, (player.x-20, player.y-60))
-        
-        if player.health <= 0 or antagonist.health <= 0:
-            show_game_over_screen(player.health > 0)
-            running = False
+        dialog.draw(screen)
         
         pygame.display.flip()
-        clock.tick(60)
     
     return True
 
@@ -760,7 +1579,10 @@ def main():
         
         show_title_screen()
         while True:
-            if not main_game():
+            if show_character_scene():
+                if main_game():  # Now includes pre-battle dialog
+                    show_title_screen()
+            else:
                 show_title_screen()
     except SystemExit:
         pass

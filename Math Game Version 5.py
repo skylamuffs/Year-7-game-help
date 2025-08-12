@@ -1,4 +1,4 @@
-'''Version 5 Adding GUI on sword'''
+'''Version 5 - Refactored code with classes and added sword images'''
 import pygame
 import sys
 import math
@@ -13,15 +13,14 @@ pygame.display.set_caption("Precise Sword Damage")
 
 # Colors
 BACKGROUND = (30, 30, 40)
-PLAYER_RED = (255, 80, 80)      # #ff5050 (player appearance)
-PLAYER_BLUE = (80, 80, 255)     # #5050ff (player appearance)
+PLAYER_RED = (255, 80, 80)      # Player color
+PLAYER_BLUE = (80, 80, 255)     # Enemy color
 WHITE = (255, 255, 255)
 
 def check_sword_hit(attacker_x, attacker_y, attacker_angle, defender_x, defender_y, defender_radius=20):
+    # Calculate sword tip position and check distance to defender
     sword_tip_x = attacker_x + 50 * math.cos(math.radians(attacker_angle))
     sword_tip_y = attacker_y + 50 * math.sin(math.radians(attacker_angle))
-    
-    # Calculate distance between sword tip and defender
     distance = math.sqrt((sword_tip_x - defender_x)**2 + (sword_tip_y - defender_y)**2)
     return distance < defender_radius
 
@@ -32,15 +31,16 @@ class Player:
         self.size = size
         self.color = color
         self.is_player = is_player
-        self.controls = controls
+        self.controls = controls  # Movement keys [left, right, up, down]
         self.sword_img = sword_img
         self.is_circle = is_circle
         self.health = 100
-        self.sword_angle = 0 if is_player else 180
+        self.sword_angle = 0 if is_player else 180  # Facing direction
         self.hit_cooldown = 0
         self.sword_length = 80
         
     def move(self, keys):
+        # Handle movement based on pressed keys
         if keys[self.controls[0]] and self.x > self.size//2:  # Left
             self.x -= 5
         if keys[self.controls[1]] and self.x < WIDTH - self.size//2:  # Right
@@ -51,25 +51,27 @@ class Player:
             self.y += 5
     
     def update(self, target=None):
+        # Update cooldown and auto-face opponent
         if self.hit_cooldown > 0:
             self.hit_cooldown -= 1
         
-        # Auto-face the opponent (optional - you can remove this if you want manual control)
+        # Auto-face the opponent if target provided
         if target:
             dx = target.x - self.x
             dy = target.y - self.y
             self.sword_angle = math.degrees(math.atan2(dy, dx))
     
     def get_sword_tip(self):
+        # Calculate sword tip position
         tip_x = self.x + self.sword_length * math.cos(math.radians(self.sword_angle))
         tip_y = self.y + self.sword_length * math.sin(math.radians(self.sword_angle))
         return (tip_x, tip_y)
     
     def check_sword_hit(self, other_player):
+        # Check if sword hits opponent
         if self.hit_cooldown > 0:
             return False
             
-        # Use Version 4's simple distance check
         hit = check_sword_hit(
             self.x, self.y, self.sword_angle,
             other_player.x, other_player.y,
@@ -77,11 +79,11 @@ class Player:
         )
         
         if hit:
-            self.hit_cooldown = 30  # Slightly longer cooldown than Version 4
+            self.hit_cooldown = 30  # Cooldown frames
         return hit
     
     def draw(self, surface):
-        # Draw fighter body
+        # Draw player body (circle or square)
         if self.is_circle:
             pygame.draw.circle(surface, self.color, (int(self.x), int(self.y)), self.size//2)
         else:
@@ -90,7 +92,7 @@ class Player:
                             self.y - self.size//2,
                             self.size, self.size))
         
-        # Draw sword
+        # Draw sword (image or line)
         if self.sword_img:
             rotated_sword = pygame.transform.rotate(self.sword_img, -self.sword_angle)
             sword_rect = rotated_sword.get_rect(center=(self.x, self.y))
@@ -144,12 +146,12 @@ def main():
         player1.update(player2)
         player2.update(player1)
         
-        # Damage checks (using Version 4's sword mechanics)
+        # Damage checks
         if player1.check_sword_hit(player2):
-            player2.health = max(0, player2.health - 10)  # Matches Version 4's damage
+            player2.health = max(0, player2.health - 10)
         
         if player2.check_sword_hit(player1):
-            player1.health = max(0, player1.health - 10)  # Matches Version 4's damage
+            player1.health = max(0, player1.health - 10)
         
         # Drawing
         screen.fill(BACKGROUND)

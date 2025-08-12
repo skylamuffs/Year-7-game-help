@@ -1,4 +1,4 @@
-'''Version 3 - Making the characters move for testing '''
+'''Version 3 - Two players with different controls (WASD vs Arrow keys)'''
 import pygame
 import sys
 import random
@@ -13,9 +13,9 @@ def main():
     pygame.display.set_caption("Samurai Math")
     
     # Colors
-    BACKGROUND = (30, 30, 40)
-    RED = (255, 80, 80)      # Player 1 (circle)
-    BLUE = (80, 80, 255)     # Player 2 (square)
+    BACKGROUND = (30, 30, 40)  # Dark background
+    RED = (255, 80, 80)        # Player 1 (circle)
+    BLUE = (80, 80, 255)       # Player 2 (square)
     
     # Player 1 (circle) - WASD controls
     circle_radius = 25

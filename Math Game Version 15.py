@@ -144,7 +144,7 @@ class PlayerAnimation:
         surface.blit(current_image, (self.x - self.width//2, self.y - self.height//2))
 
 class Fighter:
-    def __init__(self, x, y, size, color, is_player):
+    def __init__(self, x, y, size, color, is_player, enemy_type=1):
         self.x = x
         self.y = y
         self.color = color
@@ -155,6 +155,7 @@ class Fighter:
         self.is_player = is_player
         self.speed = 5 * (WIDTH / 800)
         self.size = size
+        self.enemy_type = enemy_type  # Add enemy type
         
         self.sword_img = load_image("Sword_Enemy.png", (60, 60)) or pygame.Surface((60, 60), pygame.SRCALPHA)
         self.player_sword = self.sword_img
@@ -169,9 +170,11 @@ class Fighter:
             self.attack_sword_pos = (60, -15)
         else:
             self.y = HEIGHT//2 + 60
-            self.enemy_img = load_image("Enemy_1.png", (100, 150)) or pygame.Surface((100, 150), pygame.SRCALPHA)
-            if not os.path.exists("Enemy_1.png"):
-                pygame.draw.rect(self.enemy_img, ENEMY_COLOR, (0, 0, 100, 150))
+            # Load different enemy image based on type
+            enemy_img_file = f"Enemy_{enemy_type}.png" if enemy_type > 1 else "Enemy_1.png"
+            self.enemy_img = load_image(enemy_img_file, (100, 150)) or pygame.Surface((100, 150), pygame.SRCALPHA)
+            if not os.path.exists(enemy_img_file):
+                pygame.draw.rect(self.enemy_img, color, (0, 0, 100, 150))
             self.enemy_img = pygame.transform.flip(self.enemy_img, True, False)
             self.width = 100
             self.height = 150
@@ -1056,68 +1059,121 @@ def show_game_over_screen(player_won):
 
 
 def show_game_over_screen(player_won):
-    """Display a victory or defeat screen depending on player_won."""
+    """Display a victory or defeat screen with appropriate sounds and visuals"""
     pygame.mixer.stop()  # Stop any previous sounds/music
+    
+    # Sound setup
+    try:
+        if player_won:
+            # Try to load victory sound
+            try:
+                victory_sound = pygame.mixer.Sound("victory.mp3")
+                victory_sound.set_volume(0.7)
+            except:
+                print("Could not load victory.mp3, using generated sound")
+                victory_sound = generate_sound(880, 1.5)  # Fallback sound
+        else:
+            # Try to load defeat sound
+            try:
+                defeat_sound = pygame.mixer.Sound("defeat.mp3")
+                defeat_sound.set_volume(0.7)
+            except:
+                print("Could not load defeat.mp3, using generated sound")
+                defeat_sound = generate_sound(220, 2.0)  # Fallback sound
+    except Exception as e:
+        print(f"Error setting up sounds: {e}")
+
+    # Play appropriate sound
+    if player_won:
+        try:
+            victory_sound.play()
+        except:
+            print("Could not play victory sound")
+    else:
+        try:
+            defeat_sound.play()
+        except:
+            print("Could not play defeat sound")
+
+    # Visual setup
     waiting = True
     clock = pygame.time.Clock()
     
+    # Font setup
     victory_font = pygame.font.SysFont('Arial', 72, bold=True)
     instruction_font = pygame.font.SysFont('Arial', 36, bold=True)
 
+    # Background setup
     if player_won:
-        # Play victory sound
-        sound_file = "sound of victory.mp3"
-        if os.path.exists(sound_file):
-            try:
-                victory_sound = pygame.mixer.Sound(sound_file)
-                victory_sound.set_volume(1.0)
-                victory_sound.play()
-            except Exception as e:
-                print(f"Error playing victory sound: {e}")
-
-        # Load victory background
-        victory_img_to_use = load_image("win.jpg", (WIDTH, HEIGHT), alpha=False) or pygame.Surface((WIDTH, HEIGHT))
-        if not victory_img_to_use:
-            victory_img_to_use.fill((0, 100, 0))
+        try:
+            victory_img_to_use = pygame.image.load("win.jpg").convert()
+            victory_img_to_use = pygame.transform.scale(victory_img_to_use, (WIDTH, HEIGHT))
+        except:
+            victory_img_to_use = pygame.Surface((WIDTH, HEIGHT))
+            victory_img_to_use.fill((0, 80, 0))  # Dark green background
     else:
-        # Play defeat sound
-        if os.path.exists("defeat.mp3"):
-            try:
-                defeat_sound = pygame.mixer.Sound("defeat.mp3")
-                defeat_sound.set_volume(1.0)
-                defeat_sound.play()
-            except Exception as e:
-                print(f"Error playing defeat sound: {e}")
+        try:
+            victory_img_to_use = pygame.image.load("game_over.jpg").convert()
+            victory_img_to_use = pygame.transform.scale(victory_img_to_use, (WIDTH, HEIGHT))
+        except:
+            victory_img_to_use = pygame.Surface((WIDTH, HEIGHT))
+            victory_img_to_use.fill((80, 0, 0))  # Dark red background
 
-        # Load defeat background
-        victory_img_to_use = game_over_img or pygame.Surface((WIDTH, HEIGHT))
-        if not game_over_img:
-            victory_img_to_use.fill((100, 0, 0))
-
-    # Loop until player presses a key or mouse button
+    # Main display loop
     while waiting:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:  # Changed from ENTER to SPACE
+                    waiting = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
                 waiting = False
 
         # Draw background
         screen.blit(victory_img_to_use, (0, 0))
 
-        # Display win or loss text
+        # Draw victory/defeat text with outline effect
         if player_won:
-            victory_text = victory_font.render("VICTORY!", True, (0, 255, 0))
+            text_color = (0, 255, 0)  # Green for victory
+            outline_color = (0, 100, 0)  # Dark green outline
+            text = "VICTORY!"
         else:
-            victory_text = victory_font.render("YOU LOSE", True, (255, 0, 0))
+            text_color = (255, 0, 0)  # Red for defeat
+            outline_color = (100, 0, 0)  # Dark red outline
+            text = "GAME OVER"
 
-        text_rect = victory_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 50))
-        screen.blit(victory_text, text_rect)
+        # Render text with outline
+        text_surface = victory_font.render(text, True, text_color)
+        outline_surface = victory_font.render(text, True, outline_color)
+        
+        # Text position
+        text_rect = text_surface.get_rect(center=(WIDTH//2, HEIGHT//2 - 50))
+        
+        # Draw outline
+        for offset in [(-2,-2), (2,-2), (-2,2), (2,2)]:
+            screen.blit(outline_surface, text_rect.move(offset[0], offset[1]))
+        
+        # Draw main text
+        screen.blit(text_surface, text_rect)
 
-        # Display continue prompt
-        continue_text = instruction_font.render("Press ENTER to Continue", True, (200, 200, 200))
-        continue_rect = continue_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
+        # Draw continue prompt - BLACK when won, gray when lost
+        if player_won:
+            continue_color = (0, 0, 0)  # Black for victory
+            continue_text = instruction_font.render("PRESS SPACE TO CONTINUE", True, continue_color)
+        else:
+            continue_color = (200, 200, 200)  # Gray for defeat
+            continue_text = instruction_font.render("PRESS SPACE TO CONTINUE", True, continue_color)
+        
+        continue_rect = continue_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
+        
+        # Add outline to continue text if needed (optional)
+        if player_won:
+            outline_continue = instruction_font.render("PRESS SPACE TO CONTINUE", True, (255, 255, 255))
+            for offset in [(-1,-1), (1,-1), (-1,1), (1,1)]:
+                screen.blit(outline_continue, continue_rect.move(offset[0], offset[1]))
+        
         screen.blit(continue_text, continue_rect)
 
         pygame.display.flip()
@@ -1257,7 +1313,8 @@ def generate_dungeon_question():
 def dungeon_battle():
     """Second level battle in the dungeon"""
     player = Fighter(WIDTH//4, HEIGHT//2 + 75, 60, PLAYER_COLOR, True)
-    antagonist = Fighter(3*WIDTH//4, HEIGHT//2 + 75, 60, (150, 50, 50), False)  # Dark red enemy
+    # Use enemy_type=2 for the dungeon enemy (different color and image)
+    antagonist = Fighter(3*WIDTH//4, HEIGHT//2 + 75, 60, (150, 50, 50), False, enemy_type=2)
     
     dialog = DialogBox()
     dialog.show("The dungeon guard challenges you to harder questions!")
@@ -1317,27 +1374,26 @@ def dungeon_battle():
         dialog.update(dt)
         
         if player_attack_hit:
-            if antagonist.take_damage(10):
+            if antagonist.take_damage(10):  
                 dialog.show("You defeated the dungeon guard!", "player")
-                show_game_over_screen(True)  # ✅ win
+                show_game_over_screen(True)  
                 running = False
                 return True
 
         if antagonist_attack_hit:
-            if player.take_damage(15):  # More damage in dungeon
+            if player.take_damage(10):  
              dialog.show("The dungeon guard defeated you...", "enemy")
-            show_game_over_screen(False)  # ✅ loss
-            retry = show_defeat_dialog()
-            if retry:
+             show_game_over_screen(False)
+             retry = show_defeat_dialog()
+             if retry:
                 player.health = MAX_HEALTH
                 antagonist.health = MAX_HEALTH
                 current_question, correct_answer, answers = generate_dungeon_question()
                 for i, btn in enumerate(buttons):
-                    btn.answer = answers[i]
-                dialog.show("Let's try this again!", "player")
-            else:
-                
-                running = False
+                 btn.answer = answers[i]
+            dialog.show("Let's try this again!", "player")
+        else:
+            running = False
         
         screen.blit(dungeon_bg, (0, 0))
         
@@ -1372,8 +1428,8 @@ def show_dungeon_intro():
     """Show dungeon intro scene with dialog before level 2 battle"""
     dialog = DialogBox()
     
-    # Load images
-    dungeon_bg_img = load_image("dungeon_background.jpg", (WIDTH, HEIGHT), alpha=False)
+    # Load images - using Enemy_2.png for the dungeon enemy
+    dungeon_bg_img = load_image("dungeon_background.jpg", (WIDTH, HEIGHT), alpha=False) or pygame.Surface((WIDTH, HEIGHT))
     player_img = load_image("Player_ (1).png", (150, 200)) or pygame.Surface((150, 200), pygame.SRCALPHA)
     enemy_img = load_image("Enemy_2.png", (150, 200)) or pygame.Surface((150, 200), pygame.SRCALPHA)
     enemy_img = pygame.transform.flip(enemy_img, True, False)  # Face player
@@ -1411,6 +1467,7 @@ def show_dungeon_intro():
                             dialog.show(dungeon_dialog_lines[current_line][0], dungeon_dialog_lines[current_line][1])
                         else:
                             waiting = False
+                            return True  # Explicitly return True when done
                     else:
                         dialog.complete()
         
@@ -1425,7 +1482,13 @@ def show_dungeon_intro():
         if dialog.active:
             dialog.draw_continue_prompt(screen)
         
-        pygame.display.flip()
+def show_dungeon_intro():
+    global dungeon_intro_shown
+    if dungeon_intro_shown:
+        return True  # skip dialog if already seen
+    dungeon_intro_shown = True
+
+    pygame.display.flip()
     
     return True
 
@@ -1812,8 +1875,7 @@ def main_game(level=1):
             if player_attack_hit:
                 if antagonist.take_damage(10):
                     # Show clear victory message first
-                    
-                    show_game_over_screen()
+                    show_game_over_screen(True)  # Fixed: Added player_won=True argument
                     # Then show the dialog where enemy reveals next location
                     if show_victory_dialog():
                         running = False

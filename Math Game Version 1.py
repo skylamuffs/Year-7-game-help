@@ -1,4 +1,4 @@
-'''Version 1 - Making a screen '''
+'''Version 1 - Basic Pygame setup with a black screen and quit functionality'''
 import pygame
 import sys
 
@@ -15,7 +15,7 @@ def main():
     # Main game loop
     running = True
     while running:
-        # Event handling
+        # Event handling - check for quit events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False

@@ -1,4 +1,4 @@
-'''Version 7 - from simple math to year 7 math '''
+'''Version 7 - Upgraded math problems to Year 7 level (fractions, percentages, algebra)'''
 import pygame
 import sys
 import random
@@ -21,7 +21,7 @@ question_font = pygame.font.SysFont('Arial', 32, bold=True)
 button_font = pygame.font.SysFont('Arial', 24)
 health_font = pygame.font.SysFont('Arial', 20, bold=True)
 
-# Load sword images
+# Load sword image
 try:
     sword_img = pygame.image.load("Sword_Enemy.png").convert_alpha()
     sword_img = pygame.transform.scale(sword_img, (60, 60))
@@ -31,7 +31,7 @@ except:
     print("Sword image not found, using rectangles")
     sword_img = None
 
-# Math Question Generator
+# Math Question Generator - Year 7 level
 def generate_math_question():
     question_type = random.choice([
         'fraction_addition', 
@@ -80,7 +80,6 @@ def generate_math_question():
     random.shuffle(answers)
     return question, answer, answers
 
-# Fighter class
 class Fighter:
     def __init__(self, x, y, size, color, is_player):
         self.x = x
@@ -92,10 +91,9 @@ class Fighter:
         self.is_attacking = False
         self.attack_progress = 0
         self.is_player = is_player
-        self.speed = 5
         
     def draw(self, surface):
-        # Draw fighter body - circle for player, rectangle for enemy
+        # Draw fighter body (circle for player, rectangle for enemy)
         if self.is_player:
             pygame.draw.circle(surface, self.color, (self.x, self.y), self.size//2)
         else:
@@ -115,20 +113,21 @@ class Fighter:
                     sword = pygame.transform.rotate(antagonist_sword, 45) 
                     pos = (self.x - self.size//2 - 20, self.y)  
             else:
-                # Normal sword position when not attacking
+                # Normal sword position
                 sword = player_sword if self.is_player else antagonist_sword
                 pos = (self.x + self.size//2, self.y) if self.is_player else (self.x - self.size//2, self.y)
             
-            # Draw the sword
             sword_rect = sword.get_rect(center=pos)
             surface.blit(sword, sword_rect)
-    
+
     def attack(self, target):
+        # Start attack animation
         if not self.is_attacking:
             self.is_attacking = True
             self.attack_progress = 0
             
     def update(self):
+        # Update attack animation
         if self.is_attacking:
             self.attack_progress += 0.08
             
@@ -139,10 +138,9 @@ class Fighter:
             if self.attack_progress >= 1:
                 self.is_attacking = False
                 self.x, self.y = self.original_pos
-                return True  
+                return True  # Attack completed
         return False
 
-# Button class
 class AnswerButton:
     def __init__(self, x, y, width, height, answer, index):
         self.rect = pygame.Rect(x, y, width, height)

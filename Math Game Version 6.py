@@ -1,4 +1,4 @@
-'''Version 6 - adding math problems '''
+'''Version 6 - Added math problems that determine attacks'''
 import pygame
 import sys
 import random
@@ -11,11 +11,11 @@ pygame.display.set_caption("Samurai Math")
 
 # Colors
 BACKGROUND = (30, 30, 40)
-RED = (255, 80, 80)
-BLUE = (80, 80, 255)
+RED = (255, 80, 80)    # Player color
+BLUE = (80, 80, 255)   # Enemy color
 WHITE = (255, 255, 255)
 
-# Load sword image (same for both)
+# Load sword image
 try:
     sword_img = pygame.image.load("Sword_Enemy.png").convert_alpha()
     sword_img = pygame.transform.scale(sword_img, (60, 60))
@@ -25,14 +25,12 @@ except:
     print("Sword image not found, using rectangles")
     sword_img = None
 
-# Combatants
 class Fighter:
-    def __init__(self, x, y, size, color, speed, is_player):
+    def __init__(self, x, y, size, color, is_player):
         self.x = x
         self.y = y
         self.size = size
         self.color = color
-        self.speed = speed
         self.original_pos = (x, y)
         self.health = 100
         self.is_attacking = False
@@ -40,7 +38,7 @@ class Fighter:
         self.is_player = is_player
         
     def draw(self, surface):
-        # Draw fighter body - circle for player, rectangle for enemy
+        # Draw fighter body (circle for player, rectangle for enemy)
         if self.is_player:
             pygame.draw.circle(surface, self.color, (self.x, self.y), self.size//2)
         else:
@@ -49,16 +47,18 @@ class Fighter:
                             self.y - self.size//2, 
                             self.size, self.size))
         
-        # Draw sword
+        # Draw sword if image exists
         if sword_img:
             if self.is_attacking:
+                # Rotate sword when attacking
                 if self.is_player:
-                    sword = pygame.transform.rotate(player_sword, -45)
-                    pos = (self.x + self.size//2 + 20, self.y)
+                    sword = pygame.transform.rotate(player_sword, -45) 
+                    pos = (self.x + self.size//2 + 20, self.y) 
                 else:
-                    sword = pygame.transform.rotate(antagonist_sword, 45)
-                    pos = (self.x - self.size//2 - 20, self.y)
+                    sword = pygame.transform.rotate(antagonist_sword, 45) 
+                    pos = (self.x - self.size//2 - 20, self.y)  
             else:
+                # Normal sword position
                 sword = player_sword if self.is_player else antagonist_sword
                 pos = (self.x + self.size//2, self.y) if self.is_player else (self.x - self.size//2, self.y)
             
@@ -66,10 +66,12 @@ class Fighter:
             surface.blit(sword, sword_rect)
 
     def attack(self, target):
+        # Start attack animation
         self.is_attacking = True
         self.attack_progress = 0
         
     def update(self):
+        # Update attack animation
         if self.is_attacking:
             self.attack_progress += 0.1
             if self.attack_progress < 1:
@@ -84,21 +86,17 @@ class Fighter:
                 # Return to original position
                 self.is_attacking = False
                 self.x, self.y = self.original_pos
-                return True  
+                return True  # Attack completed
         return False
 
-# Create fighters
-player = Fighter(WIDTH//4, HEIGHT//2, 40, RED, 5, True)
-antagonist = Fighter(3*WIDTH//4, HEIGHT//2, 50, BLUE, 5, False)
-
-# Math system
+# Math problem generator
 def generate_question():
     a, b = random.randint(1, 10), random.randint(1, 10)
     op = random.choice(['+', '-', '*'])
     answer = eval(f"{a}{op}{b}")
     question = f"{a} {op} {b} = ?"
     
-    # Generate 2 wrong answers
+    # Generate wrong answers
     answers = [answer]
     while len(answers) < 3:
         wrong = answer + random.choice([-1,1]) * random.randint(1,5)
@@ -129,6 +127,10 @@ class AnswerButton:
     
     def is_clicked(self, event):
         return event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos)
+
+# Create fighters
+player = Fighter(WIDTH//4, HEIGHT//2, 40, RED, True)
+antagonist = Fighter(3*WIDTH//4, HEIGHT//2, 50, BLUE, False)
 
 # Game setup
 current_question, correct_answer, answers = generate_question()

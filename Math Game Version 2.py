@@ -1,4 +1,4 @@
-'''Version 2 - Adding a protagonist and antagonist as shape '''
+'''Version 2 - Added player (red circle) and enemy (green square) with movement controls'''
 import pygame
 import sys
 
@@ -12,16 +12,16 @@ def main():
     pygame.display.set_caption("Sumrai Math")
     
     # Colors
-    BLUE = (0, 0, 255)
-    RED = (255, 0, 0)
-    GREEN = (0, 255, 0)
+    BLUE = (0, 0, 255)  # Background
+    RED = (255, 0, 0)    # Player (circle)
+    GREEN = (0, 255, 0)  # Enemy (square)
     
-    # Protagonist (circle)
+    # Player settings
     circle_radius = 30
     circle_x, circle_y = WIDTH // 4, HEIGHT // 2
     circle_speed = 5
     
-    # Antagonist (square)
+    # Enemy settings
     square_size = 50
     square_x, square_y = 3 * WIDTH // 4, HEIGHT // 2
     
@@ -34,7 +34,7 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
         
-        # Handle keyboard input for protagonist movement
+        # Handle keyboard input for player movement (arrow keys)
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] and circle_x > circle_radius:
             circle_x -= circle_speed
@@ -48,10 +48,10 @@ def main():
         # Fill screen with blue
         screen.fill(BLUE)
         
-        # Draw antagonist (green square)
+        # Draw enemy (green square)
         pygame.draw.rect(screen, GREEN, (square_x - square_size//2, square_y - square_size//2, square_size, square_size))
         
-        # Draw protagonist (red circle)
+        # Draw player (red circle)
         pygame.draw.circle(screen, RED, (circle_x, circle_y), circle_radius)
         
         # Update display

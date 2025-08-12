@@ -1483,12 +1483,60 @@ def show_dungeon_intro():
             dialog.draw_continue_prompt(screen)
         
 def show_dungeon_intro():
-    global dungeon_intro_shown
-    if dungeon_intro_shown:
-        return True  # skip dialog if already seen
-    dungeon_intro_shown = True
-
-    pygame.display.flip()
+    """Show dungeon intro scene with dialog before level 2 battle"""
+    # Remove all 'global dungeon_intro_shown' and related checks
+    
+    dialog = DialogBox()
+    dungeon_bg_img = load_image("dungeon_background.jpg", (WIDTH, HEIGHT), alpha=False) or pygame.Surface((WIDTH, HEIGHT))
+    player_img = load_image("Player_ (1).png", (150, 200)) or pygame.Surface((150, 200), pygame.SRCALPHA)
+    enemy_img = load_image("Enemy_2.png", (150, 200)) or pygame.Surface((150, 200), pygame.SRCALPHA)
+    enemy_img = pygame.transform.flip(enemy_img, True, False)
+    
+    dungeon_dialog_lines = [
+        ("You enter the dark, damp dungeon...", None),
+        ("The air is thick with the smell of mold and despair.", "player"),
+        ("*clank* *clank* The sound of armor echoes through the halls.", None),
+        ("Halt! Who dares enter the dungeon?", "enemy"),
+        ("I'm here for my son! Let us pass!", "player"),
+        ("Not so fast! Answer my questions first!", "enemy")
+    ]
+    
+    current_line = 0
+    dialog.show(dungeon_dialog_lines[current_line][0], dungeon_dialog_lines[current_line][1])
+    
+    clock = pygame.time.Clock()
+    waiting = True
+    
+    while waiting:
+        dt = clock.tick(60) / 1000.0
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return False
+                if event.key == pygame.K_RETURN:
+                    if dialog.is_complete():
+                        current_line += 1
+                        if current_line < len(dungeon_dialog_lines):
+                            dialog.show(dungeon_dialog_lines[current_line][0], dungeon_dialog_lines[current_line][1])
+                        else:
+                            waiting = False
+                            return True
+                    else:
+                        dialog.complete()
+        
+        screen.blit(dungeon_bg_img, (0, 0))
+        screen.blit(player_img, (WIDTH//4 - 75, HEIGHT//2 - 100))
+        screen.blit(enemy_img, (3*WIDTH//4 - 75, HEIGHT//2 - 100))
+        dialog.update(dt)
+        dialog.draw(screen)
+        if dialog.active:
+            dialog.draw_continue_prompt(screen)
+        
+        pygame.display.flip()
     
     return True
 

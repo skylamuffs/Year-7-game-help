@@ -1,5 +1,4 @@
 '''Version 10 - Adding voice-over and background images after warning'''
-'''Samurai Math Game - Complete Working Version'''
 import pygame
 import sys
 import random

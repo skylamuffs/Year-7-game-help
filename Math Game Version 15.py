@@ -561,7 +561,7 @@ def show_pre_battle_dialog():
     dialog = DialogBox()
     dialog_lines = [
         ("Well, well, well, look who we have here?", "enemy",),
-        ("Where did you hide my son!? GIVE IT BACK!", "player"),
+        ("Where did you hide my son!? GIVE HIM BACK!", "player"),
         ("Hah, since your husband kill our master's son\nwe can't give it back this easily", "enemy"),
         ("Then what do you want so you can get out of my way", "player"),
         ("Simple,all you do just answer my math questions correctly", "enemy"),
@@ -1313,7 +1313,6 @@ def generate_dungeon_question():
 def dungeon_battle():
     """Second level battle in the dungeon"""
     player = Fighter(WIDTH//4, HEIGHT//2 + 75, 60, PLAYER_COLOR, True)
-    # Use enemy_type=2 for the dungeon enemy (different color and image)
     antagonist = Fighter(3*WIDTH//4, HEIGHT//2 + 75, 60, (150, 50, 50), False, enemy_type=2)
     
     dialog = DialogBox()
@@ -1376,24 +1375,28 @@ def dungeon_battle():
         if player_attack_hit:
             if antagonist.take_damage(10):  
                 dialog.show("You defeated the dungeon guard!", "player")
-                show_game_over_screen(True)  
-                running = False
-                return True
+                show_game_over_screen(True)
+                # Show the enemy taking player to son
+                if dungeon_to_jail_transition():
+                    running = False
+                    return True
+                else:
+                    running = False
 
         if antagonist_attack_hit:
             if player.take_damage(10):  
-             dialog.show("The dungeon guard defeated you...", "enemy")
-             show_game_over_screen(False)
-             retry = show_defeat_dialog()
-             if retry:
-                player.health = MAX_HEALTH
-                antagonist.health = MAX_HEALTH
-                current_question, correct_answer, answers = generate_dungeon_question()
-                for i, btn in enumerate(buttons):
-                 btn.answer = answers[i]
-            dialog.show("Let's try this again!", "player")
-        else:
-            running = False
+                dialog.show("The dungeon guard defeated you...", "enemy")
+                show_game_over_screen(False)
+                retry = show_defeat_dialog()
+                if retry:
+                    player.health = MAX_HEALTH
+                    antagonist.health = MAX_HEALTH
+                    current_question, correct_answer, answers = generate_dungeon_question()
+                    for i, btn in enumerate(buttons):
+                        btn.answer = answers[i]
+                    dialog.show("Let's try this again!", "player")
+                else:
+                    running = False
         
         screen.blit(dungeon_bg, (0, 0))
         
@@ -1423,6 +1426,142 @@ def dungeon_battle():
         pygame.display.flip()
     
     return False
+
+def dungeon_to_jail_transition():
+      """Show transition from dungeon to jail with proper walking animations"""
+    dialog = DialogBox()
+    
+    # Load images
+    jail_bg = load_image("jail_background.jpg", (WIDTH, HEIGHT), alpha=False) or pygame.Surface((WIDTH, HEIGHT))
+    
+    # Create animated player
+    player = PlayerAnimation(WIDTH//4, HEIGHT//2 + 50)
+    player.direction = 1  # Face right
+    
+    # Create enemy with walking animation
+    enemy_frames = []
+    for i in range(1, 5):  # Assuming you have Enemy_2 walk frames
+        try:
+            frame = load_image(f"Enemy_2_walk_{i}.png", (100, 150))
+            enemy_frames.append(frame)
+        except:
+            # Fallback if no walk frames
+            surf = pygame.Surface((100, 150), pygame.SRCALPHA)
+            pygame.draw.rect(surf, (150, 50, 50), (0, 0, 100, 150))
+            enemy_frames.append(surf)
+    
+    son_img = load_image("son.png", (100, 150)) or pygame.Surface((100, 150), pygame.SRCALPHA)
+    
+    dialog_lines = [
+        ("Alright... I admit defeat.", "enemy"),
+        ("I'll take you to your son.", "enemy"),
+        ("*They walk through the dark corridors*", None),
+        ("Here we are... the prison cells.", "enemy"),
+        ("Mother! You came for me!", "son"),
+        ("Of course I did! Are you okay?", "player"),
+        ("I'm scared but unharmed. Let's go home!", "son"),
+        ("We're leaving this place!", "player")
+    ]
+    
+    current_line = 0
+    dialog.show(dialog_lines[current_line][0], dialog_lines[current_line][1])
+    
+    # Animation variables
+    player_x = WIDTH//4
+    enemy_x = 3*WIDTH//4
+    son_x = WIDTH + 100  # Start off-screen right
+    background_x = 0
+    current_bg = dungeon_bg
+    transition_state = 0  # 0=dungeon, 1=walking, 2=jail
+    
+    # Enemy animation control
+    enemy_frame = 0
+    enemy_anim_speed = 0.15
+    enemy_anim_counter = 0
+    
+    clock = pygame.time.Clock()
+    waiting = True
+    
+    while waiting:
+        dt = clock.tick(60) / 1000.0
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return False
+                if event.key == pygame.K_RETURN:
+                    if dialog.is_complete():
+                        current_line += 1
+                        if current_line < len(dialog_lines):
+                            dialog.show(dialog_lines[current_line][0], dialog_lines[current_line][1])
+                            if current_line == 2:  # Start walking transition
+                                transition_state = 1
+                                player.direction = 1  # Face right for walking
+                            elif current_line == 3:  # Switch to jail background
+                                transition_state = 2
+                                current_bg = jail_bg
+                                son_x = 3*WIDTH//4  # Bring son on screen
+                        else:
+                            waiting = False
+                    else:
+                        dialog.complete()
+        
+        # Handle walking animation
+        if transition_state == 1:
+            # Move background to simulate walking
+            background_x -= 3
+            if background_x <= -WIDTH:
+                background_x = 0
+            
+            # Update player animation
+            player.update(dt)
+            
+            # Update enemy animation
+            enemy_anim_counter += dt
+            if enemy_anim_counter >= enemy_anim_speed:
+                enemy_frame = (enemy_frame + 1) % len(enemy_frames)
+                enemy_anim_counter = 0
+        
+        screen.fill(BLACK)
+        
+        # Draw appropriate background
+        if transition_state < 2:
+            # Draw dungeon background (scrolling if walking)
+            screen.blit(dungeon_bg, (background_x, 0))
+            if background_x < 0:
+                screen.blit(dungeon_bg, (background_x + WIDTH, 0))
+        else:
+            # Draw jail background
+            screen.blit(jail_bg, (0, 0))
+        
+        # Draw characters
+        if transition_state < 2:
+            # In dungeon/walking - draw animated characters
+            player.x = player_x
+            player.draw(screen)
+            
+            # Draw enemy with walking animation
+            enemy_img = enemy_frames[enemy_frame]
+            enemy_img = pygame.transform.flip(enemy_img, True, False)  # Face right
+            screen.blit(enemy_img, (enemy_x - 50, HEIGHT//2 - 75))
+        else:
+            # In jail with son
+            player.direction = -1  # Face left in jail
+            player.x = WIDTH//4
+            player.draw(screen)
+            screen.blit(son_img, (son_x - 50, HEIGHT//2 - 75))
+        
+        dialog.update(dt)
+        dialog.draw(screen)
+        if dialog.active:
+            dialog.draw_continue_prompt(screen)
+        
+        pygame.display.flip()
+    
+    return True
 
 def show_dungeon_intro():
     """Show dungeon intro scene with dialog before level 2 battle"""
@@ -1484,8 +1623,6 @@ def show_dungeon_intro():
         
 def show_dungeon_intro():
     """Show dungeon intro scene with dialog before level 2 battle"""
-    # Remove all 'global dungeon_intro_shown' and related checks
-    
     dialog = DialogBox()
     dungeon_bg_img = load_image("dungeon_background.jpg", (WIDTH, HEIGHT), alpha=False) or pygame.Surface((WIDTH, HEIGHT))
     player_img = load_image("Player_ (1).png", (150, 200)) or pygame.Surface((150, 200), pygame.SRCALPHA)
@@ -1494,7 +1631,7 @@ def show_dungeon_intro():
     
     dungeon_dialog_lines = [
         ("You enter the dark, damp dungeon...", None),
-        ("The air is thick with the smell of mold and despair.", "player"),
+        ("The air is thick with the smell of mold and despair.", None),
         ("*clank* *clank* The sound of armor echoes through the halls.", None),
         ("Halt! Who dares enter the dungeon?", "enemy"),
         ("I'm here for my son! Let us pass!", "player"),
@@ -1524,7 +1661,6 @@ def show_dungeon_intro():
                             dialog.show(dungeon_dialog_lines[current_line][0], dungeon_dialog_lines[current_line][1])
                         else:
                             waiting = False
-                            return True
                     else:
                         dialog.complete()
         
@@ -1537,7 +1673,6 @@ def show_dungeon_intro():
             dialog.draw_continue_prompt(screen)
         
         pygame.display.flip()
-    
     return True
 
 def show_castle_scene():
@@ -1975,15 +2110,21 @@ def main_game(level=1):
     
     elif level == 2:
         # Show castle scene first
-        if show_castle_scene():
-            # Then show dungeon intro dialog before the battle
-            if show_dungeon_intro():
-                # Then proceed to dungeon battle
-                if dungeon_battle():
-                    # If dungeon battle is won, show ending scene
-                    show_ending_scene()
-                    return True
-        return False
+        if not show_castle_scene():
+            return False
+            
+        # Then show dungeon intro dialog before the battle
+        if not show_dungeon_intro():
+            return False
+            
+        # Then proceed to dungeon battle
+        dungeon_result = dungeon_battle()
+        
+        # If dungeon battle is won, show ending scene
+        if dungeon_result:
+            show_ending_scene()
+            
+        return dungeon_result
 
 def main():
     global story
